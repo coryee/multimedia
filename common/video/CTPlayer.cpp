@@ -51,14 +51,14 @@ int CTPlayer::play(const char *pcURL)
 		return CTPLAYER_EC_FAILURE;
 
 	MBUFFERSYSBufferInit(NULL, 0, 0, 1024 * 1024 * 10, &m_sys_buffer);
-	/*m_udp_server.setLocalIPPort(pcIPAddr, iPort);
+	m_udp_server.setLocalIPPort(pcIPAddr, iPort);
 	m_udp_server.setMode(UDPS_WORK_MODE_DUMP2BUFFER);
 	m_udp_server.setSYSBuffer(&m_sys_buffer);
-	m_udp_server.start();*/
+	m_udp_server.start();
 
 	// test
-	ThreadHandle thread;
-	CTCreateThread(&thread, (ThreadFunc)readDataFromFile, &m_sys_buffer);
+// 	ThreadHandle thread;
+// 	CTCreateThread(&thread, (ThreadFunc)readDataFromFile, &m_sys_buffer);
 
 	if (H264DEC_EC_OK != m_decoder.Init())
 		return CTPLAYER_EC_FAILURE;
