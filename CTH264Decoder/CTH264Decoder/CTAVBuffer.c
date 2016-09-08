@@ -1,8 +1,9 @@
 #include "CTAVBuffer.h"
 
-void CTAVPacketQueueInit(CTAVPacketQueue *pQueue)
+void CTAVPacketQueueInit(CTAVPacketQueue *pQueue, int iQueueSize)
 {
 	memset(pQueue, 0, sizeof(CTAVPacketQueue));
+	pQueue->iQueueSize = iQueueSize;
 	pQueue->pMutex = CTMutexCreate();
 }
 
@@ -15,6 +16,9 @@ int CTAVPacketQueuePut(CTAVPacketQueue *pQueue, AVPacket *pPacket) {
 
 	AVPacketList *pPacket1;
 
+	if (pQueue->iNumPkts >= pQueue->iQueueSize)
+		return CTAV_BUFFER_EC_FULL;
+
 	pPacket1 = (AVPacketList *)av_malloc(sizeof(AVPacketList));
 	if (!pPacket1)
 		return CTAV_BUFFER_EC_FAILURE;
@@ -25,7 +29,6 @@ int CTAVPacketQueuePut(CTAVPacketQueue *pQueue, AVPacket *pPacket) {
 	pPacket1->next = NULL;
 
 	CTMutexLock(pQueue->pMutex);
-
 	if (!pQueue->pLastPkt)
 		pQueue->pFirstPkt = pPacket1;
 	else
@@ -76,14 +79,14 @@ int CTAVFrameBufferInit(CTAVFrameBuffer *pFrameBuffer, int iSize)
 	pFrameBuffer->iHead = 0;
 	pFrameBuffer->iTail = 0;
 
-	pFrameBuffer->pFrames = malloc(iSize * sizeof(AVFrame*));
+	pFrameBuffer->pFrames = malloc(iSize * sizeof(CTAVFrame));
 	assert(pFrameBuffer->pFrames != NULL);
-	memset(pFrameBuffer->pFrames, 0, iSize * sizeof(AVFrame*));
+	memset(pFrameBuffer->pFrames, 0, iSize * sizeof(CTAVFrame));
 
 	for (i = 0; i < iSize; i++)
 	{
-		pFrameBuffer->pFrames[i] = av_frame_alloc();
-		assert(pFrameBuffer->pFrames[i] != NULL);
+		pFrameBuffer->pFrames[i].pFrame = av_frame_alloc();
+		assert(pFrameBuffer->pFrames[i].pFrame != NULL);
 	}
 
 	return CTAV_BUFFER_EC_OK;
@@ -102,10 +105,10 @@ void CTAVFrameBufferDeInit(CTAVFrameBuffer *pFrameBuffer)
 	{
 		for (i = 0; i < pFrameBuffer->iSize; i++)
 		{
-			if (pFrameBuffer->pFrames[i])
+			if (pFrameBuffer->pFrames[i].pFrame)
 			{
 				av_frame_free(&pFrameBuffer->pFrames[i]);
-				pFrameBuffer->pFrames[i] = NULL;
+				pFrameBuffer->pFrames[i].pFrame = NULL;
 			}
 		}
 		free(pFrameBuffer->pFrames);
@@ -128,11 +131,7 @@ CTAVFrame* CTAVFrameBufferFirstAvailFrame(CTAVFrameBuffer *pFrameBuffer)
 	// check if the buffer is full
 	if (pFrameBuffer->iHead == ((pFrameBuffer->iTail + 1) % pFrameBuffer->iSize))
 		return NULL;
-	if (pFrameBuffer->pFrames[pFrameBuffer->iTail] == NULL)
-	{
-		int kk = 0;
-	}
-	return pFrameBuffer->pFrames[pFrameBuffer->iTail];
+	return &(pFrameBuffer->pFrames[pFrameBuffer->iTail]);
 }
 
 // called by producer
@@ -168,7 +167,7 @@ CTAVFrame* CTAVFrameBufferPeekFirstFrame(CTAVFrameBuffer *pFrameBuffer)
 	if (pFrameBuffer->iTail == pFrameBuffer->iHead)
 		return NULL;
 	else
-		return pFrameBuffer->pFrames[pFrameBuffer->iHead];
+		return &(pFrameBuffer->pFrames[pFrameBuffer->iHead]);
 }
 
 // called by consumer

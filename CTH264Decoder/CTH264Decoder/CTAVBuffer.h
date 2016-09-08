@@ -15,11 +15,13 @@ extern "C"
 #define CTAV_BUFFER_EC_OK			0
 #define CTAV_BUFFER_EC_FAILURE		-1
 #define CTAV_BUFFER_EC_NO_ITEM		-2
+#define CTAV_BUFFER_EC_FULL			-3
 
 typedef struct CTAVPacketQueue 
 {
 	AVPacketList	*pFirstPkt;
 	AVPacketList	*pLastPkt;
+	int				iQueueSize;
 	int				iNumPkts;
 	int				iTotalSize;
  	CTMutex			*pMutex;
@@ -35,14 +37,14 @@ typedef struct CTAVFrame
 
 typedef struct CTAVFrameBuffer 
 {
-	CTAVFrame	**pFrames;
+	CTAVFrame	*pFrames;
 	int			iSize;
 	int			iHead;
 	int			iTail;
 } CTAVFrameBuffer;
 
 // methods for PacketQueue
-extern void CTAVPacketQueueInit(CTAVPacketQueue *q);
+extern void CTAVPacketQueueInit(CTAVPacketQueue *q, int iQueueSize);
 extern int CTAVPacketQueueNumItems(CTAVPacketQueue *q);
 extern int CTAVPacketQueuePut(CTAVPacketQueue *q, AVPacket *pkt);
 

@@ -30,6 +30,7 @@ static AVPixelFormat GetHwFormat(AVCodecContext *s, const AVPixelFormat *pix_fmt
 CTH264Decoder::CTH264Decoder()
 {
 	m_pHWInputStream = NULL;
+	m_dVideoClock = 0;
 }
 
 CTH264Decoder::~CTH264Decoder()
@@ -108,7 +109,6 @@ int CTH264Decoder::Init(AVStream *pVideoStream, CTH264DecodeMode iMode)
 	if (CTAVFrameBufferInit(&m_frameBuffer, 10) != CTAV_BUFFER_EC_OK)
 		return H264DEC_EC_FAILURE;
 
-
 	/* register all formats and codecs */
 	av_register_all();
 	m_pCodec = avcodec_find_decoder(m_pVideoStream->codec->codec_id);
@@ -131,6 +131,7 @@ int CTH264Decoder::Init(AVStream *pVideoStream, CTH264DecodeMode iMode)
 	// 需设置成1， 在解码时avframe结构中的内存由自己控制，即avframe消费完之后需要调用av_frame_unref释放其中内存
 	m_pCodecCtx->refcounted_frames = 1;
 
+	
 	if (UseHardwareDecoder() != H264DEC_EC_OK)
 	{ 
 		m_pCodecCtx->pix_fmt = m_outputFmt;
@@ -328,10 +329,31 @@ int CTH264Decoder::DecodeEx(AVPacket *pPacket, CTAVFrame *pFrame)
 		}
 
 		pts *= av_q2d(m_pVideoStream->time_base);
-// 			pts = synchronize_video(is, pFrame, pts);
+		pts = SynchronizeVideo(pFrame->pFrame, pts);
 
 		pFrame->pts = pts;
 	}
 
 	return iRet;
+}
+
+double CTH264Decoder::SynchronizeVideo(AVFrame *pSrcFrame, double pts) 
+{
+
+	double dFrameDelay;
+
+	if (pts != 0) {
+		/* if we have pts, set video clock to it */
+		m_dVideoClock = pts;
+	}
+	else {
+		/* if we aren't given a pts, set it to the clock */
+		pts = m_dVideoClock;
+	}
+	/* update the video clock */
+	dFrameDelay = av_q2d(m_pVideoStream->codec->framerate);
+	/* if we are repeating a frame, adjust clock accordingly */
+	dFrameDelay += pSrcFrame->repeat_pict * (dFrameDelay * 0.5);
+	m_dVideoClock += dFrameDelay;
+	return pts;
 }

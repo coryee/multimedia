@@ -61,6 +61,7 @@ public:
 private:
 	int UseHardwareDecoder();
 	int DecodeEx(AVPacket *pPacket, CTAVFrame *pFrame);
+	double SynchronizeVideo(AVFrame *pSrcFrame, double pts);
 
 private:
 	CTH264DecodeMode m_iMode;
@@ -88,6 +89,7 @@ public:
 
 	int m_bHWAccel;
 	AVPixelFormat m_outputFmt;
+	double m_dVideoClock;
 };
 
 #endif
