@@ -18,9 +18,6 @@
     <ClInclude Include="CTH264Decoder.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\common\video\ish264decoder.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="CTAVBuffer.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -41,9 +38,6 @@
     <ClCompile Include="CTH264Decoder.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\common\video\ish264decoder.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="CTAVBuffer.c">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -57,6 +51,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\common\util\commutil.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
