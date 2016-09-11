@@ -15,38 +15,26 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CTH264Decoder.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="CTAVBuffer.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\common\util\mutexutil.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\common\util\threadutil.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\common\video\ffmpeg_dxva2.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\common\util\commutil.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\common\thread\mutexutil.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\thread\threadutil.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\video\CTAVBuffer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\video\CTH264Decoder.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CTH264Decoder.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="CTAVBuffer.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\common\util\mutex_win.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\common\util\threadutil.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\common\video\ffmpeg_dxva2.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -54,6 +42,18 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\thread\mutex_win.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\thread\threadutil.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\video\CTAVBuffer.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\video\CTH264Decoder.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
