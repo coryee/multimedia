@@ -118,8 +118,9 @@ AVPixelFormat GetHwFormat(AVCodecContext *s, const AVPixelFormat *pix_fmts)
 
 int CvideoplayerDlg::InitPlayer()
 {
-	player.setHandle(this->GetDlgItem(IDC_SCREEN)->GetSafeHwnd());
-	player.play("udp://10.0.70.189:10001");
+	player.SetHandle(this->GetDlgItem(IDC_SCREEN)->GetSafeHwnd());
+/*	player.Play("udp://10.0.70.189:10001");*/
+	player.Play("E:\\work\\codebase\\multimedia\\data\\When_You_Believe.mp4");
 
 	return 0;
 }
@@ -376,7 +377,8 @@ void CvideoplayerDlg::OnBnClickedPlay()
 
 	TRACE("start");
 	printf("start\n");
-	player.setHandle(this->GetDlgItem(IDC_SCREEN)->GetSafeHwnd());
-	player.play("udp://10.0.70.189:10001");
+	player.SetHandle(this->GetDlgItem(IDC_SCREEN)->GetSafeHwnd());
+	// player.Play("udp://10.0.70.189:10001");
+	player.Play("E:\\work\\codebase\\multimedia\\data\\When_You_Believe.mp4");
 
 }

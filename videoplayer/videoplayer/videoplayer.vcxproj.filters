@@ -42,22 +42,25 @@
     <ClInclude Include="..\..\..\common\util\mbuffer.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\common\util\threadutil.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\common\video\avframebuffer.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\common\video\CTDisplay.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\..\common\video\CTPlayer.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\common\video\ish264decoder.h">
+    <ClInclude Include="..\..\common\video\ffmpeg_dxva2.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\common\video\ffmpeg_dxva2.h">
+    <ClInclude Include="..\..\common\video\CTAVBuffer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\video\CTH264Decoder.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\thread\threadutil.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\thread\mutexutil.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
@@ -80,22 +83,25 @@
     <ClCompile Include="..\..\..\common\util\mbuffer.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\common\util\threadutil.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\common\video\avframebuffer.c">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\common\video\CTDisplay.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\common\video\CTPlayer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\common\video\ish264decoder.cpp">
+    <ClCompile Include="..\..\common\video\ffmpeg_dxva2.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\common\video\ffmpeg_dxva2.cpp">
+    <ClCompile Include="..\..\common\video\CTAVBuffer.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\video\CTH264Decoder.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\thread\threadutil.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\thread\mutex_win.c">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
