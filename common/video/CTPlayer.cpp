@@ -1,7 +1,14 @@
 #include "CTPlayer.h"
+#include "commutil.h"
 
+#define CTPLAYER_MAX_PACKETQUEUE_SIZE	20
 
-static int readDataFromFile(void *arg)
+#define CTPlayerInfo	printf
+#define CTPlayerError	printf
+
+static int CTPlayerExecute(void *arg);
+
+static int ReadDataFromFile(void *arg)
 {
 	MBUFFERSYSBuffer *gSysbuffer = (MBUFFERSYSBuffer *)arg;
 	char *pInFile = "../../data/When_You_Believe.h264";
@@ -29,62 +36,156 @@ static int readDataFromFile(void *arg)
 
 CTPlayer::CTPlayer()
 {
-	
+	m_packet_queue = 0;
+	m_status = CTPLAYER_STATUS_DEFAULT;
+	m_keep_running = 0;
 }
 
+CTPlayer::~CTPlayer()
+{
+}
 
-int CTPlayer::setHandle(HWND hwnd)
+int CTPlayer::SetHandle(HWND hwnd)
 {
 	m_hwnd = hwnd;
 	return CTPLAYER_EC_FAILURE;
 }
 
-int CTPlayer::play(const char *pcURL)
+int CTPlayer::Play(const char *url)
 {
-	char pcIPAddr[16];
-	int iPort;
+	int ret;
+	
+	ret = Init(url);
+	if (CTPLAYER_EC_OK != ret) {
+		return ret;
+	}
 
-	if (memcmp(pcURL, "udp", 3) != 0) // udp
-		return CTPLAYER_EC_FAILURE;
-
-	if (sscanf(pcURL, "%*[^/]//%[^:]:%d", pcIPAddr, &iPort) != 2)
-		return CTPLAYER_EC_FAILURE;
-
-	MBUFFERSYSBufferInit(NULL, 0, 0, 1024 * 1024 * 10, &m_sys_buffer);
-	m_udp_server.setLocalIPPort(pcIPAddr, iPort);
-	m_udp_server.setMode(UDPS_WORK_MODE_DUMP2BUFFER);
-	m_udp_server.setSYSBuffer(&m_sys_buffer);
-	m_udp_server.start();
+	m_decoder.SetInputPacketQueue(m_packet_queue);
+	m_decoder.Start();
+	
+	
 
 	// test
 // 	ThreadHandle thread;
 // 	CTCreateThread(&thread, (ThreadFunc)readDataFromFile, &m_sys_buffer);
 
-	if (H264DEC_EC_OK != m_decoder.Init())
-		return CTPLAYER_EC_FAILURE;
 
-	m_decoder.SetInputBuffer(&m_sys_buffer);
-	m_frame_buffer = m_decoder.GetOutputBuffer();
-	m_decoder.StartDecode();
-
-	m_disp.init(m_hwnd);
-	m_disp.setAVFrameBuffer(CTDISP_BUFFER_INDEX_VIDEO, m_decoder.GetOutputBuffer());
-	m_disp.start();
+	m_display.Init(m_hwnd);
+	m_display.SetInputFrameBuffer(CTDISP_BUFFER_INDEX_VIDEO, m_frame_buffer);
+	m_display.Start();
 	
+	m_status = CTPLAYER_STATUS_INITED;
+
+	CTThreadHandle thread;
+	CTCreateThread(&thread, (CTThreadFunc)CTPlayerExecute, this);
+	CTCloseThreadHandle(thread);
 
 	return CTPLAYER_EC_OK;
 }
 
-int CTPlayer::pause()
+int CTPlayer::Pause()
 {
 	return CTPLAYER_EC_OK;
 }
 
-int CTPlayer::stop()
+int CTPlayer::Stop()
 {
+	m_keep_running = 0;
+	while (m_status == CTPLAYER_STATUS_RUNNING) {
+		CTSleep(1);
+	}
+
+	m_decoder.Stop();
+	if (m_format_ctx != NULL) 
+		avformat_close_input(&m_format_ctx);
+	if (m_packet_queue != NULL) {
+		CTAVPacketQueueDeInit(m_packet_queue);
+		free(m_packet_queue);
+		m_packet_queue = NULL;
+	}
+
+
 	return CTPLAYER_EC_OK;
 }
 
-CTPlayer::~CTPlayer()
+int CTPlayer::Execute()
 {
+	m_keep_running = 1;
+	m_status = CTPLAYER_STATUS_RUNNING;
+	while (m_keep_running)
+	{
+		while (1)
+		{
+			if (av_read_frame(m_format_ctx, &m_packet) < 0)
+				break;
+			if (m_packet.stream_index == m_video_idx)
+				break;
+		}
+
+		while (CTAVPacketQueuePut(m_packet_queue, &m_packet) == CTAV_BUFFER_EC_FULL)
+		{
+			CTSleep(1);
+		}
+
+		while (CTAVFrameBufferNumFrames(m_frame_buffer) > 0)
+		{
+			CTAVFrame *pFrame = CTAVFrameBufferFirstFrame(m_frame_buffer);
+			printf("width:%d", pFrame->pFrame->width);
+		}
+		av_packet_unref(&m_packet);	
+	}
+	m_status = CTPLAYER_STATUS_STOPPED;
+
+	return CTPLAYER_EC_OK;
+}
+
+int CTPlayer::Init(const char *url)
+{
+	av_register_all();
+	m_format_ctx = avformat_alloc_context();
+	if (avformat_open_input(&m_format_ctx, url, NULL, NULL) != 0) {
+		CTPlayerError("Couldn't open input stream.\n");
+		return CTPLAYER_EC_FAILURE;
+	}
+	if (avformat_find_stream_info(m_format_ctx, NULL) < 0) {
+		CTPlayerError("Couldn't find stream information.\n");
+		return CTPLAYER_EC_FAILURE;
+	}
+
+	m_video_idx = -1;
+	for (int i = 0; i < m_format_ctx->nb_streams; i++) {
+		if (m_format_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO){
+			m_video_idx = i;
+			break;
+		}
+	}
+	if (m_video_idx == -1){
+		CTPlayerError("Didn't find a video stream.\n");
+		return CTPLAYER_EC_FAILURE;
+	}
+
+	m_packet_queue = (CTAVPacketQueue *)malloc(sizeof(CTAVPacketQueue));
+	if (m_packet_queue == NULL) {
+		CTPlayerError("Out of memory\n");
+		return CTPLAYER_EC_FAILURE;
+	}
+	CTAVPacketQueueInit(m_packet_queue, CTPLAYER_MAX_PACKETQUEUE_SIZE);
+	if (H264DEC_EC_FAILURE ==
+		m_decoder.Init(m_format_ctx->streams[m_video_idx], H264DEC_MODE_PACKETQUEUE)) {
+		CTPlayerError("Can't initialize decoder\n");
+		return CTPLAYER_EC_FAILURE;
+	}
+	m_frame_buffer = m_decoder.OutputFrameBuffer();
+
+	return CTPLAYER_EC_OK;
+}
+
+
+
+static int CTPlayerExecute(void *arg)
+{
+	CTPlayer *player = (CTPlayer *)arg;
+	player->Execute();
+
+	return 0;
 }

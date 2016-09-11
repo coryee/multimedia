@@ -19,15 +19,26 @@ extern "C"
 //#pragma comment(lib, "SDL2.lib")
 //#pragma comment(lib, "SDL2main.lib")
 
+#define CTDISPInfo		printf
+#define CTDISPError		printf
+
 static int CTDisplayExecute(void *arg);
 
 CTDisplay::CTDisplay()
 {
-	m_bStop = 0;
-	m_iFrameWidth = 0;
-	m_iFrameHeight = 0;
-	m_iDispWidth = 0;
-	int m_iDispHeight = 0;
+	m_hwnd = 0;
+	m_wnd_width = 0;
+	m_wnd_height = 0;
+	m_frame_width = 0;
+	m_frame_height = 0;
+	m_disp_width = 0;
+	m_disp_height = 0;
+	memset(m_frame_buffers, 0, sizeof(CTAVFrameBuffer *)*CTDISP_BUFFER_INDEX_NUM);
+	m_screen = NULL;
+	m_renderer = NULL;
+	m_texture = NULL;
+	m_keep_running = 0;
+	m_is_running = 0;
 }
 
 
@@ -35,107 +46,144 @@ CTDisplay::~CTDisplay()
 {
 }
 
+int CTDisplay::Init()
+{
+	m_hwnd = 0;
 
-int CTDisplay::init(HWND hwnd)
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
+		CTDISPError("Could not initialize SDL - %s\n", SDL_GetError());
+		return CTDISP_EC_FAILURE;
+	}
+
+	m_wnd_width = CTDISP_WINDOW_WIDTH_DEFAULT;
+	m_wnd_height = CTDISP_WINDOW_HEIGHT_DEFAULT;
+
+
+	// 必须在主线程创建window，否则鼠标无法操作
+	m_screen = SDL_CreateWindow("video player", SDL_WINDOWPOS_UNDEFINED,
+		 	SDL_WINDOWPOS_UNDEFINED, m_wnd_width, m_wnd_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+	if (m_screen == NULL) {
+		CTDISPError("Could not creat window\n");
+		return CTDISP_EC_FAILURE;
+	}
+
+	m_renderer = SDL_CreateRenderer(m_screen, -1, SDL_RENDERER_ACCELERATED);
+	if (!m_renderer) {
+		CTDISPError("Could not create renderer\n");
+		return CTDISP_EC_FAILURE;
+	}
+
+	return CTDISP_EC_OK;
+}
+
+#ifdef _WIN32
+int CTDisplay::Init(HWND hwnd)
 {
 	m_hwnd = hwnd;
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-		printf("[CTDisplay] Could not initialize SDL - %s\n", SDL_GetError());
+		CTDISPError("Could not initialize SDL - %s\n", SDL_GetError());
 		return CTDISP_EC_FAILURE;
 	}
 
 	RECT rect;
 	GetWindowRect(m_hwnd, &rect);
-	m_iWndWidth = rect.right - rect.left;
-	m_iWndHeight = rect.bottom - rect.top;
+	m_wnd_width = rect.right - rect.left;
+	m_wnd_height = rect.bottom - rect.top;
 	
-
-	// 必须在主线程创建window，否则鼠标无法操作
-// 	m_screen = SDL_CreateWindow("video player", SDL_WINDOWPOS_UNDEFINED,
-// 		SDL_WINDOWPOS_UNDEFINED, m_iWidth, m_iHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 	m_screen = SDL_CreateWindowFrom((void *)m_hwnd);
 	if (m_screen == NULL) {
-		printf("[CTDisplay] SDL: could not creat window - exiting\n");
+		CTDISPError("Could not creat window\n");
 		return CTDISP_EC_FAILURE;
 	}
 
-	m_renderer = SDL_CreateRenderer(m_screen, -1, SDL_RENDERER_SOFTWARE/*SDL_RENDERER_ACCELERATED*/);
+	m_renderer = SDL_CreateRenderer(m_screen, -1, SDL_RENDERER_ACCELERATED);
 	if (!m_renderer) {
-		printf("[CTDisplay] SDL: could not create renderer - exiting\n");
+		CTDISPError("Could not create renderer\n");
 		return CTDISP_EC_FAILURE;
 	}
 
 	return CTDISP_EC_OK;
 }
+#endif
 
-int CTDisplay::setAVFrameBuffer(int iBufferIndex, ISAVFrameBuffer *pFrameBuffer)
+int CTDisplay::SetInputFrameBuffer(CTAVBufferIndex iBufferIndex, CTAVFrameBuffer *pFrameBuffer)
 {
 	if (iBufferIndex < 0 || iBufferIndex >= CTDISP_BUFFER_INDEX_NUM || pFrameBuffer == NULL)
 		return CTDISP_EC_FAILURE;
-	m_pFrameBuffer[iBufferIndex] = pFrameBuffer;
+	m_frame_buffers[iBufferIndex] = pFrameBuffer;
 
 	return CTDISP_EC_OK;
 }
 
-int CTDisplay::start()
+int CTDisplay::Start()
 {
-	ThreadHandle handle;
-	if (CTCreateThread(&handle, (ThreadFunc)CTDisplayExecute, this) != 0)
+	CTThreadHandle handle;
+	if (CTCreateThread(&handle, (CTThreadFunc)CTDisplayExecute, this) != 0)
 		return CTDISP_EC_FAILURE;
+	CTCloseThreadHandle(handle);
 	return CTDISP_EC_OK;
 }
 
-int CTDisplay::displayVideo()
+int CTDisplay::Stop()
 {
-	ISAVFrameBuffer *pVideoFrameBuffer = m_pFrameBuffer[CTDISP_BUFFER_INDEX_VIDEO];
-	SDL_Texture *pTexture = NULL;
+	m_keep_running = 0;
+	while (m_is_running) {
+		CTSleep(1);
+	}
 
-//	TRACE("displayVideo begin\n");
+	return CTDISP_EC_OK;
+}
 
-	bool bGotGapInVertical = false;
-	int iLeftX = 0;
-	int iTopY = 0;
+int CTDisplay::Execute()
+{
+	CTAVFrameBuffer *video_frame_buffer = m_frame_buffers[CTDISP_BUFFER_INDEX_VIDEO];
+	SDL_Texture *texture = NULL;
 
-	while (!m_bStop)
-	{
-		// fetch frame from Video_Frame_Buffer
-		if (ISAVFrameBufferNumFrame(pVideoFrameBuffer) <= 0)
-		{
+	bool got_gap_in_vertical = false;
+	int left_x = 0;
+	int top_y = 0;
+
+	m_keep_running = 1;
+	m_is_running = 1;
+	while (m_keep_running) {
+		// fetch a frame from Video_Frame_Buffer
+		if (CTAVFrameBufferNumFrames(video_frame_buffer) <= 0) {
 			CTSleep(1); // sleep for one millisecond
 			continue;
 		}
-//		continue;
 
-		AVFrame *pFrame = ISAVFrameBufferFirstFrame(pVideoFrameBuffer);
+		CTAVFrame *frame = CTAVFrameBufferFirstFrame(video_frame_buffer);
 		
-		if ((m_iFrameWidth == 0 || m_iFrameHeight == 0)/* ||
-			(m_iImgWidth != pFrame->width || m_iImgHeight != pFrame->height)*/)
-		{
-			m_iFrameWidth = pFrame->width;
-			m_iFrameHeight = pFrame->height;
-			
-			double iRatio = (double)m_iFrameWidth / (double)m_iFrameHeight;
-			m_iDispWidth = iRatio * m_iWndHeight;
-			if (m_iDispWidth > m_iWndWidth)
-			{
-				m_iDispWidth = m_iWndWidth;
-				m_iDispHeight = m_iDispWidth / iRatio;
-				bGotGapInVertical = true;
-				iTopY = (m_iWndHeight - m_iDispHeight) / 2;
+		if ((m_frame_width == 0 || m_frame_height == 0)/* ||
+			(m_iImgWidth != pFrame->width || m_iImgHeight != pFrame->height)*/) {
+			m_frame_width = frame->pFrame->width;
+			m_frame_height = frame->pFrame->height;
+
+			if (m_frame_width != m_wnd_width || m_frame_height != m_wnd_height) {
+				m_wnd_width = m_frame_width;
+				m_wnd_height = m_frame_height;
+				SDL_SetWindowSize(m_screen, m_wnd_width, m_wnd_width);
 			}
-			else
-			{
-				m_iDispHeight = m_iWndHeight;
-				bGotGapInVertical = false;
-				iLeftX = (m_iWndWidth - m_iDispWidth) / 2;
+			
+			double iRatio = (double)m_frame_width / (double)m_frame_height;
+			m_disp_width = iRatio * m_wnd_height;
+			if (m_disp_width > m_wnd_width) {
+				m_disp_width = m_wnd_width;
+				m_disp_height = m_disp_width / iRatio;
+				got_gap_in_vertical = true;
+				top_y = (m_wnd_height - m_disp_height) / 2;
+			} else {
+				m_disp_height = m_wnd_height;
+				got_gap_in_vertical = false;
+				left_x = (m_wnd_width - m_disp_width) / 2;
 			}
 
-			if (pTexture == NULL)
+			if (texture == NULL)
 			{
-				pTexture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING,
-					m_iFrameWidth, m_iFrameHeight);
-				if (pTexture == NULL)
+				texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING,
+					m_frame_width, m_frame_height);
+				if (texture == NULL)
 					return CTDISP_EC_FAILURE;
 			}
 		}
@@ -144,38 +192,40 @@ int CTDisplay::displayVideo()
 		SDL_Rect rect;
 		rect.x = 0;
 		rect.y = 0;
-		rect.w = m_iFrameWidth;
-		rect.h = m_iFrameHeight;
-		SDL_UpdateYUVTexture(pTexture, &rect,
-			pFrame->data[0], pFrame->linesize[0],
-			pFrame->data[1], pFrame->linesize[1],
-			pFrame->data[2], pFrame->linesize[2]);
+		rect.w = m_frame_width;
+		rect.h = m_frame_height;
+		SDL_UpdateYUVTexture(texture, &rect,
+			frame->pFrame->data[0], frame->pFrame->linesize[0],
+			frame->pFrame->data[1], frame->pFrame->linesize[1],
+			frame->pFrame->data[2], frame->pFrame->linesize[2]);
 
 		SDL_RenderClear(m_renderer);
 
-		rect.x = iLeftX;
-		rect.y = iTopY;
-		if (bGotGapInVertical)
+		rect.x = left_x;
+		rect.y = top_y;
+		if (got_gap_in_vertical)
 		{
-			rect.w = m_iWndWidth;
-			rect.h = m_iDispHeight;
+			rect.w = m_wnd_width;
+			rect.h = m_disp_height;
 		}
 		else
 		{
-			rect.w = m_iDispWidth;
-			rect.h = m_iWndHeight;
+			rect.w = m_disp_width;
+			rect.h = m_wnd_height;
 		}
-		SDL_RenderCopy(m_renderer, pTexture, NULL, &rect);
+		SDL_RenderCopy(m_renderer, texture, NULL, &rect);
 		SDL_RenderPresent(m_renderer);
 			
-		av_frame_unref(pFrame);
+		av_frame_unref(frame->pFrame);
 		// CTSleep(30);
 	}
+
+	m_is_running = 0;
 
 	return CTDISP_EC_OK;
 }
 
-int CTDisplay::displayAudio()
+int CTDisplay::DisplayAudio()
 {
 	return CTDISP_EC_OK;
 }
@@ -183,6 +233,6 @@ int CTDisplay::displayAudio()
 static int CTDisplayExecute(void *arg)
 {
 	CTDisplay *disp = (CTDisplay *)arg;
-	disp->displayVideo();
+	disp->Execute();
 	return(0);
 }
