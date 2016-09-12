@@ -72,7 +72,7 @@ int CTH264Decoder::Init(CTH264DecodeMode iMode)
 
 // 	m_pCodecCtx->coded_width = 4096;
 // 	m_pCodecCtx->coded_height = 2048;
-	if (UseHardwareDecoder() != H264DEC_EC_OK)
+	if (UseHardwareDecoder())
 	{
 		m_pCodecCtx->pix_fmt = m_outputFmt;
 	}
@@ -174,7 +174,7 @@ void CTH264Decoder::DeInit()
 	}
 }
 
-void CTH264Decoder::SetInputPacketQueue(CTAVPacketQueue *pPacketQueue)
+void CTH264Decoder::SetPacketQueue(CTAVPacketQueue *pPacketQueue)
 {
 	m_pPacketQueue = pPacketQueue;
 }
@@ -213,6 +213,7 @@ int CTH264Decoder::Stop()
 
 void CTH264Decoder::Execute()
 {
+	int iFrameCount = 0;
 	int iRet = H264DEC_EC_NEED_MORE_DATA;
 
 	if (m_iMode != H264DEC_MODE_PACKETQUEUE)
@@ -222,21 +223,24 @@ void CTH264Decoder::Execute()
 	while (!m_bShouldStop)
 	{
 		while (CTAVPacketQueueNumItems(m_pPacketQueue) <= 0 || 
-			CTAVFrameBufferNumAvailFrame(&m_frameBuffer) <= 0)
+			CTAVFrameBufferNumAvailFrames(&m_frameBuffer) <= 0)
 		{
 			CTSleep(1); // just sleep for one millisecond to release cpu time slice.
 		}
 		CTAVPacketQueueGet(m_pPacketQueue, &m_packet);
 		CTAVFrame *pFrame = CTAVFrameBufferFirstAvailFrame(&m_frameBuffer);
 		if (DecodeEx(&m_packet, pFrame) == H264DEC_EC_OK)
+		{
 			CTAVFrameBufferExtend(&m_frameBuffer);
+			printf("decoded frame:%d\n", ++iFrameCount);
+		}
 	}
 
 	/* flush cached frames */
 	m_packet.data = NULL;
 	m_packet.size = 0;
 	do {
-		if (CTAVFrameBufferNumAvailFrame(&m_frameBuffer) <= 0)
+		if (CTAVFrameBufferNumAvailFrames(&m_frameBuffer) <= 0)
 			break;
 
 		CTAVFrame *pFrame = CTAVFrameBufferFirstAvailFrame(&m_frameBuffer);
@@ -263,6 +267,11 @@ int CTH264Decoder::Decode(AVPacket *pPacket, AVFrame *pFrame)
 
 	if (iGotFrame)
 	{
+		if (m_bHWAccel)
+		{
+			if (0 != dxva2_retrieve_data_call(m_pCodecCtx, pFrame))
+				return H264DEC_EC_FAILURE;
+		}
 		if (m_pixfmt == AV_PIX_FMT_NONE)
 			m_pixfmt = m_pCodecCtx->pix_fmt;
 		return H264DEC_EC_OK;
@@ -281,8 +290,9 @@ int CTH264Decoder::OutputPixelFormat()
 	return m_outputFmt;
 }
 
-int CTH264Decoder::UseHardwareDecoder()
+bool CTH264Decoder::UseHardwareDecoder()
 {
+//	return false;
 	// try to use hardware decoder firstly
 	InputStream *ist = new InputStream();
 	assert(ist);
@@ -303,12 +313,12 @@ int CTH264Decoder::UseHardwareDecoder()
 
 		m_pHWInputStream = ist;
 
-		return H264DEC_EC_OK;
+		return true;
 	}
 	else
 	{
 		delete ist;
-		return H264DEC_EC_FAILURE;
+		return false;
 	}
 
 }

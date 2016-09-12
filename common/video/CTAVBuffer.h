@@ -54,10 +54,10 @@ extern int CTAVPacketQueuePut(CTAVPacketQueue *q, AVPacket *pkt);
 //	CTAV_BUFFER_EC_FAILURE if failed
 extern int CTAVPacketQueueGet(CTAVPacketQueue *q, AVPacket *pkt);
 
-// methods for FrameBuffer
+// functions for FrameBuffer
 extern int CTAVFrameBufferInit(CTAVFrameBuffer *pFrameBuffer, int iSize);
 extern void CTAVFrameBufferDeInit(CTAVFrameBuffer *pFrameBuffer);
-extern int CTAVFrameBufferNumAvailFrame(CTAVFrameBuffer *pFrameBuffer);
+extern int CTAVFrameBufferNumAvailFrames(CTAVFrameBuffer *pFrameBuffer);
 extern CTAVFrame* CTAVFrameBufferFirstAvailFrame(CTAVFrameBuffer *pFrameBuffer);
 extern void CTAVFrameBufferExtend(CTAVFrameBuffer *pFrameBuffer);
 extern int CTAVFrameBufferNumFrames(CTAVFrameBuffer *pFrameBuffer);

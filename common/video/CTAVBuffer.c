@@ -126,7 +126,7 @@ void CTAVFrameBufferDeInit(CTAVFrameBuffer *pFrameBuffer)
 }
 
 // called by producer
-int CTAVFrameBufferNumAvailFrame(CTAVFrameBuffer *pFrameBuffer)
+int CTAVFrameBufferNumAvailFrames(CTAVFrameBuffer *pFrameBuffer)
 {
 	assert(pFrameBuffer != NULL);
 	// we subtract by 1 to differentiate the empty and full case

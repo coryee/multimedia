@@ -60,7 +60,7 @@ int CTPlayer::Play(const char *url)
 		return ret;
 	}
 
-	m_decoder.SetInputPacketQueue(m_packet_queue);
+	m_decoder.SetPacketQueue(m_packet_queue);
 	m_decoder.Start();
 	
 	
@@ -71,7 +71,8 @@ int CTPlayer::Play(const char *url)
 
 
 	m_display.Init(m_hwnd);
-	m_display.SetInputFrameBuffer(CTDISP_BUFFER_INDEX_VIDEO, m_frame_buffer);
+	m_display.SetFrameBuffer(CTDISP_BUFFER_INDEX_VIDEO, m_frame_buffer);
+	m_display.SetVideoFrameFormat(m_decoder.m_outputFmt);
 	m_display.Start();
 	
 	m_status = CTPLAYER_STATUS_INITED;
@@ -127,11 +128,11 @@ int CTPlayer::Execute()
 			CTSleep(1);
 		}
 
-		while (CTAVFrameBufferNumFrames(m_frame_buffer) > 0)
-		{
-			CTAVFrame *pFrame = CTAVFrameBufferFirstFrame(m_frame_buffer);
-			printf("width:%d", pFrame->pFrame->width);
-		}
+// 		while (CTAVFrameBufferNumFrames(m_frame_buffer) > 0)
+// 		{
+// 			CTAVFrame *pFrame = CTAVFrameBufferFirstFrame(m_frame_buffer);
+// 			printf("width:%d \n", pFrame->pFrame->width);
+// 		}
 		av_packet_unref(&m_packet);	
 	}
 	m_status = CTPLAYER_STATUS_STOPPED;

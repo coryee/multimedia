@@ -50,7 +50,7 @@ public:
 	//		  H264DEC_EC_NEED_MORE_FAILE if failed
 	int Decode(AVPacket *pPacket, AVFrame *pFrame);
 	// the following three methods are used only in H264DEC_MODE_PACKETQUEUE mode
-	void SetInputPacketQueue(CTAVPacketQueue *pPacketQueue);
+	void SetPacketQueue(CTAVPacketQueue *pPacketQueue);
 	CTAVFrameBuffer *OutputFrameBuffer();
 	int Start();
 	int Stop();
@@ -59,7 +59,7 @@ public:
 	int IsHardwareAccelerated();
 
 private:
-	int UseHardwareDecoder();
+	bool UseHardwareDecoder();
 	int DecodeEx(AVPacket *pPacket, CTAVFrame *pFrame);
 	double SynchronizeVideo(AVFrame *pSrcFrame, double pts);
 

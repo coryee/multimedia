@@ -22,6 +22,7 @@
 #include <dxva2api.h>
 
 #include "ffmpeg_dxva2.h"
+#include "commutil.h"
 
 extern "C"
 {
@@ -274,12 +275,13 @@ extern "C"
         if (ret < 0)
             return ret;
 
+		printf("time:%lu, before lock\n", CTGetMilliSeconds());
         hr = IDirect3DSurface9_LockRect(surface, &LockedRect, NULL, D3DLOCK_READONLY);
         if (FAILED(hr)) {
             av_log(NULL, AV_LOG_ERROR, "Unable to lock DXVA2 surface\n");
             return AVERROR_UNKNOWN;
         }
-
+		printf("time:%lu, after lock\n", CTGetMilliSeconds());
         av_image_copy_plane(ctx->tmp_frame->data[0], ctx->tmp_frame->linesize[0],
             (uint8_t*)LockedRect.pBits,
             LockedRect.Pitch, frame->width, frame->height);
@@ -289,6 +291,7 @@ extern "C"
             LockedRect.Pitch, frame->width, frame->height / 2);
 
         IDirect3DSurface9_UnlockRect(surface);
+		printf("time:%lu, after copy\n", CTGetMilliSeconds());
 
         ret = av_frame_copy_props(ctx->tmp_frame, frame);
         if (ret < 0)
@@ -296,7 +299,7 @@ extern "C"
 
         av_frame_unref(frame);
         av_frame_move_ref(frame, ctx->tmp_frame);
-
+		printf("time:%ul, before return\n", CTGetMilliSeconds());
         return 0;
     fail:
         av_frame_unref(ctx->tmp_frame);

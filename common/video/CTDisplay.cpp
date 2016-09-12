@@ -34,6 +34,8 @@ CTDisplay::CTDisplay()
 	m_disp_width = 0;
 	m_disp_height = 0;
 	memset(m_frame_buffers, 0, sizeof(CTAVFrameBuffer *)*CTDISP_BUFFER_INDEX_NUM);
+	m_video_format = AV_PIX_FMT_YUV420P;
+	m_img_convert_ctx = NULL;
 	m_screen = NULL;
 	m_renderer = NULL;
 	m_texture = NULL;
@@ -44,6 +46,14 @@ CTDisplay::CTDisplay()
 
 CTDisplay::~CTDisplay()
 {
+	if (m_screen) {
+		SDL_DestroyWindow(m_screen);
+		m_screen = NULL;
+	}
+	if (m_renderer) {
+		SDL_DestroyRenderer(m_renderer);
+		m_renderer = NULL;
+	}
 }
 
 int CTDisplay::Init()
@@ -107,13 +117,18 @@ int CTDisplay::Init(HWND hwnd)
 }
 #endif
 
-int CTDisplay::SetInputFrameBuffer(CTAVBufferIndex iBufferIndex, CTAVFrameBuffer *pFrameBuffer)
+int CTDisplay::SetFrameBuffer(CTAVBufferIndex iBufferIndex, CTAVFrameBuffer *pFrameBuffer)
 {
 	if (iBufferIndex < 0 || iBufferIndex >= CTDISP_BUFFER_INDEX_NUM || pFrameBuffer == NULL)
 		return CTDISP_EC_FAILURE;
 	m_frame_buffers[iBufferIndex] = pFrameBuffer;
 
 	return CTDISP_EC_OK;
+}
+
+void CTDisplay::SetVideoFrameFormat(AVPixelFormat format)
+{
+	m_video_format = format;
 }
 
 int CTDisplay::Start()
@@ -139,6 +154,7 @@ int CTDisplay::Execute()
 {
 	CTAVFrameBuffer *video_frame_buffer = m_frame_buffers[CTDISP_BUFFER_INDEX_VIDEO];
 	SDL_Texture *texture = NULL;
+	AVFrame *converted_frame = NULL;
 
 	bool got_gap_in_vertical = false;
 	int left_x = 0;
@@ -153,17 +169,20 @@ int CTDisplay::Execute()
 			continue;
 		}
 
-		CTAVFrame *frame = CTAVFrameBufferFirstFrame(video_frame_buffer);
-		
+		CTAVFrame *ctframe = CTAVFrameBufferFirstFrame(video_frame_buffer);
+		continue;
+
 		if ((m_frame_width == 0 || m_frame_height == 0)/* ||
 			(m_iImgWidth != pFrame->width || m_iImgHeight != pFrame->height)*/) {
-			m_frame_width = frame->pFrame->width;
-			m_frame_height = frame->pFrame->height;
+			m_frame_width = ctframe->pFrame->width;
+			m_frame_height = ctframe->pFrame->height;
 
 			if (m_frame_width != m_wnd_width || m_frame_height != m_wnd_height) {
-				m_wnd_width = m_frame_width;
-				m_wnd_height = m_frame_height;
-				SDL_SetWindowSize(m_screen, m_wnd_width, m_wnd_width);
+				if (m_hwnd == 0) {
+					m_wnd_width = m_frame_width;
+					m_wnd_height = m_frame_height;
+					SDL_SetWindowSize(m_screen, m_wnd_width, m_wnd_height);
+				}
 			}
 			
 			double iRatio = (double)m_frame_width / (double)m_frame_height;
@@ -179,8 +198,18 @@ int CTDisplay::Execute()
 				left_x = (m_wnd_width - m_disp_width) / 2;
 			}
 
-			if (texture == NULL)
-			{
+			if (m_video_format != AV_PIX_FMT_YUV420P) {
+				if (m_img_convert_ctx == NULL)
+					m_img_convert_ctx = sws_getContext(m_frame_width, m_frame_height, m_video_format, 
+						m_frame_width, m_frame_height, AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
+				if (converted_frame == NULL) {
+					uint8_t *out_buffer = (uint8_t *)av_malloc(avpicture_get_size(AV_PIX_FMT_YUV420P, m_frame_width, m_frame_height));
+					converted_frame = av_frame_alloc();
+					avpicture_fill((AVPicture *)converted_frame, out_buffer, AV_PIX_FMT_YUV420P, m_frame_width, m_frame_height);
+				}
+			}
+
+			if (texture == NULL) {
 				texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING,
 					m_frame_width, m_frame_height);
 				if (texture == NULL)
@@ -194,10 +223,17 @@ int CTDisplay::Execute()
 		rect.y = 0;
 		rect.w = m_frame_width;
 		rect.h = m_frame_height;
+
+		AVFrame *frame = ctframe->pFrame;
+		if (m_video_format != AV_PIX_FMT_YUV420P) {
+			sws_scale(m_img_convert_ctx, (const uint8_t* const*)frame->data, frame->linesize, 0, m_frame_height, 
+				converted_frame->data, converted_frame->linesize);
+			frame = converted_frame;
+		}
 		SDL_UpdateYUVTexture(texture, &rect,
-			frame->pFrame->data[0], frame->pFrame->linesize[0],
-			frame->pFrame->data[1], frame->pFrame->linesize[1],
-			frame->pFrame->data[2], frame->pFrame->linesize[2]);
+			frame->data[0], frame->linesize[0],
+			frame->data[1], frame->linesize[1],
+			frame->data[2], frame->linesize[2]);
 
 		SDL_RenderClear(m_renderer);
 
@@ -215,11 +251,17 @@ int CTDisplay::Execute()
 		}
 		SDL_RenderCopy(m_renderer, texture, NULL, &rect);
 		SDL_RenderPresent(m_renderer);
-			
-		av_frame_unref(frame->pFrame);
+		
+		av_frame_unref(ctframe->pFrame);
 		// CTSleep(30);
 	}
 
+	av_frame_free(&converted_frame);
+	sws_freeContext(m_img_convert_ctx);
+	m_img_convert_ctx = NULL;
+
+	if (texture)
+		SDL_DestroyTexture(texture);
 	m_is_running = 0;
 
 	return CTDISP_EC_OK;
