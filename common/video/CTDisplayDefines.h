@@ -1,0 +1,8 @@
+#pragma once
+
+#define CTDISP_WINDOW_WIDTH_DEFAULT		100
+#define CTDISP_WINDOW_HEIGHT_DEFAULT	50
+
+#define CTDISP_EC_OK		0
+#define CTDISP_EC_FAILURE	-1
+

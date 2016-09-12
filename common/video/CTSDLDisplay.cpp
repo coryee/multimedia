@@ -19,8 +19,8 @@ extern "C"
 //#pragma comment(lib, "SDL2.lib")
 //#pragma comment(lib, "SDL2main.lib")
 
-#define CTDISPInfo		printf
-#define CTDISPError		printf
+#define SDLDISPInfo		printf
+#define SDLDISPError	printf
 
 static int CTDisplayExecute(void *arg);
 
@@ -35,11 +35,10 @@ CTSDLDisplay::CTSDLDisplay()
 	m_disp_height = 0;
 	m_video_format = AV_PIX_FMT_YUV420P;
 	m_img_convert_ctx = NULL;
+	m_converted_frame = NULL;
 	m_screen = NULL;
 	m_renderer = NULL;
 	m_texture = NULL;
-	m_keep_running = 0;
-	m_is_running = 0;
 }
 
 
@@ -73,80 +72,86 @@ CTSDLDisplay::~CTSDLDisplay()
 
 int CTSDLDisplay::Init()
 {
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-		CTDISPError("Could not initialize SDL - %s\n", SDL_GetError());
-		return CTDISP_EC_FAILURE;
-	}
-
-	m_wnd_width = CTDISP_WINDOW_WIDTH_DEFAULT;
-	m_wnd_height = CTDISP_WINDOW_HEIGHT_DEFAULT;
-
-	// 必须在主线程创建window，否则鼠标无法操作
-	m_screen = SDL_CreateWindow("video player", SDL_WINDOWPOS_UNDEFINED,
-		 	SDL_WINDOWPOS_UNDEFINED, m_wnd_width, m_wnd_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-	if (m_screen == NULL) {
-		CTDISPError("Could not creat window\n");
-		return CTDISP_EC_FAILURE;
-	}
-
-	m_renderer = SDL_CreateRenderer(m_screen, -1, SDL_RENDERER_ACCELERATED);
-	if (!m_renderer) {
-		CTDISPError("Could not create renderer\n");
-		return CTDISP_EC_FAILURE;
-	}
-
-	// set default value;
-	SetVideoFrameFormat(AV_PIX_FMT_YUV420P);
-
-	return CTDISP_EC_OK;
+	return Init(0);
 }
 
 #ifdef _WIN32
 int CTSDLDisplay::Init(HWND hwnd)
 {
 	m_hwnd = hwnd;
-
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-		CTDISPError("Could not initialize SDL - %s\n", SDL_GetError());
+		SDLDISPError("Could not initialize SDL - %s\n", SDL_GetError());
 		return CTDISP_EC_FAILURE;
 	}
 
-	RECT rect;
-	GetWindowRect(m_hwnd, &rect);
-	m_wnd_width = rect.right - rect.left;
-	m_wnd_height = rect.bottom - rect.top;
-	
-	m_screen = SDL_CreateWindowFrom((void *)m_hwnd);
+	if (hwnd) {
+		RECT rect;
+		GetWindowRect(m_hwnd, &rect);
+		m_wnd_width = rect.right - rect.left;
+		m_wnd_height = rect.bottom - rect.top;
+		m_screen = SDL_CreateWindowFrom((void *)m_hwnd);
+	} else {
+		m_wnd_width = CTDISP_WINDOW_WIDTH_DEFAULT;
+		m_wnd_height = CTDISP_WINDOW_HEIGHT_DEFAULT;
+
+		// 必须在主线程创建window，否则鼠标无法操作
+		m_screen = SDL_CreateWindow("video player", SDL_WINDOWPOS_UNDEFINED,
+			SDL_WINDOWPOS_UNDEFINED, m_wnd_width, m_wnd_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+	}
 	if (m_screen == NULL) {
-		CTDISPError("Could not creat window\n");
+		SDLDISPError("Could not creat window\n");
 		return CTDISP_EC_FAILURE;
 	}
 
 	m_renderer = SDL_CreateRenderer(m_screen, -1, SDL_RENDERER_ACCELERATED);
 	if (!m_renderer) {
-		CTDISPError("Could not create renderer\n");
+		SDLDISPError("Could not create renderer\n");
 		return CTDISP_EC_FAILURE;
 	}
 
 	// set default value;
-	SetVideoFrameFormat(AV_PIX_FMT_YUV420P);
+	SetVideoFormat(AV_PIX_FMT_YUV420P);
 	return CTDISP_EC_OK;
 }
 #endif
 
-void CTSDLDisplay::SetVideoFrameFormat(AVPixelFormat format)
+void CTSDLDisplay::SetVideoFormat(AVPixelFormat format)
 {
-	if (m_video_format == format)
-		return;
 	m_video_format = format;
 }
 
-int CTSDLDisplay::SetFrameResolution(int width, int height)
+void CTSDLDisplay::SetFrameResolution(int width, int height)
 {
 	if (m_frame_width == width && m_frame_height == height)
 		return;
+	m_frame_width = width;
+	m_frame_height = height;
+	UpdateLayout();
+	UpdateDisplayContext();
+}
 
-	UpdateSettings();
+void CTSDLDisplay::SetWindowSize(int width, int height)
+{
+	if (m_wnd_width == width && m_wnd_height == height) {
+		return;
+	}
+	m_wnd_width = width;
+	m_wnd_height = height;
+	UpdateLayout();
+}
+
+void CTSDLDisplay::OnWindowSizeChanged()
+{
+	RECT rect;
+	long width;
+	long heigth;
+
+	if (m_hwnd) {
+		GetWindowRect(m_hwnd, &rect);
+		width = rect.right - rect.left;
+		heigth = rect.bottom - rect.top;
+		SetWindowSize(width, heigth);
+	}
 }
 
 int CTSDLDisplay::Display(AVFrame *frame)
@@ -156,6 +161,8 @@ int CTSDLDisplay::Display(AVFrame *frame)
 	rect.y = 0;
 	rect.w = m_frame_width;
 	rect.h = m_frame_height;
+
+	SetFrameResolution(frame->width, frame->height);
 
 	if (m_video_format != AV_PIX_FMT_YUV420P) {
 		sws_scale(m_img_convert_ctx, (const uint8_t* const*)frame->data, frame->linesize, 0, m_frame_height, 
@@ -184,13 +191,10 @@ int CTSDLDisplay::Display(AVFrame *frame)
 	SDL_RenderCopy(m_renderer, m_texture, NULL, &rect);
 	SDL_RenderPresent(m_renderer);
 		
-	av_frame_unref(frame);
-	// CTSleep(30);
-
 	return CTDISP_EC_OK;
 }
 
-int CTSDLDisplay::UpdateSettings()
+int CTSDLDisplay::UpdateLayout()
 {
 	m_got_gap_in_vertical = false;
 	m_left_x = 0;
@@ -217,31 +221,56 @@ int CTSDLDisplay::UpdateSettings()
 		m_got_gap_in_vertical = false;
 		m_left_x = (m_wnd_width - m_disp_width) / 2;
 	}
+	return CTDISP_EC_FAILURE;
+}
 
+int CTSDLDisplay::UpdateDisplayContext()
+{
 	if (m_video_format != AV_PIX_FMT_YUV420P) {
-		if (!m_img_convert_ctx) {
+		if (m_img_convert_ctx) {
 			sws_freeContext(m_img_convert_ctx);
 			m_img_convert_ctx = NULL;
 		}
 		m_img_convert_ctx = sws_getContext(m_frame_width, m_frame_height, m_video_format,
 			m_frame_width, m_frame_height, AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
+		if (m_img_convert_ctx == NULL) {
+			SDLDISPError("sws_getContext failed\n");
+			assert(false);
+			return CTDISP_EC_FAILURE;
+		}
 
-		if (!m_converted_frame) {
+
+		if (m_converted_frame) {
 			av_frame_free(&m_converted_frame);
 			m_converted_frame = NULL;
 		}
-		uint8_t *out_buffer = (uint8_t *)av_malloc(avpicture_get_size(AV_PIX_FMT_YUV420P, m_frame_width, m_frame_height));
 		m_converted_frame = av_frame_alloc();
+		if (m_converted_frame == NULL) {
+			SDLDISPError("out of memory\n");
+			assert(false);
+			return CTDISP_EC_FAILURE;
+		}
+
+		uint8_t *out_buffer = (uint8_t *)av_malloc(avpicture_get_size(AV_PIX_FMT_YUV420P, m_frame_width, m_frame_height));
+		if (out_buffer == NULL) {
+			SDLDISPError("out of memory\n");
+			assert(false);
+			return CTDISP_EC_FAILURE;
+		}
 		avpicture_fill((AVPicture *)m_converted_frame, out_buffer, AV_PIX_FMT_YUV420P, m_frame_width, m_frame_height);
 	}
 
-
-	if (!m_texture) {
+	if (m_texture) {
 		SDL_DestroyTexture(m_texture);
 		m_texture = NULL;
 	}
 	m_texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING,
 		m_frame_width, m_frame_height);
-	if (m_texture == NULL)
+	if (m_texture == NULL) {
+		SDLDISPError("SDL_CreateTexture failed\n");
+		assert(false);
 		return CTDISP_EC_FAILURE;
+	}
+
+	return CTDISP_EC_OK;
 }

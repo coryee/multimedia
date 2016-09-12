@@ -63,6 +63,15 @@
     <ClInclude Include="..\..\common\video\CTSDLDisplay.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\common\video\CTDisplay.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\video\CTDisplayDefines.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\video\CTDXVA2Display.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="videoplayer.cpp">
@@ -102,6 +111,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\common\video\CTSDLDisplay.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\video\CTDisplay.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\video\CTDXVA2Display.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

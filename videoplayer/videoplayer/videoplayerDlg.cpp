@@ -380,6 +380,6 @@ void CvideoplayerDlg::OnBnClickedPlay()
 	player.SetHandle(this->GetDlgItem(IDC_SCREEN)->GetSafeHwnd());
 	// player.Play("udp://10.0.70.189:10001");
 	//player.Play("E:\\testfile\\dj_good_4k.mp4");
-	player.Play("E:\\testfile\\dj_good_4k.mp4");
+	player.Play("E:\\work\\codebase\\multimedia\\data\\When_You_Believe.mp4");
 
 }

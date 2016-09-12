@@ -225,8 +225,14 @@ void CTH264Decoder::Execute()
 		while (CTAVPacketQueueNumItems(m_pPacketQueue) <= 0 || 
 			CTAVFrameBufferNumAvailFrames(&m_frameBuffer) <= 0)
 		{
+			if (m_bShouldStop)
+				break;
 			CTSleep(1); // just sleep for one millisecond to release cpu time slice.
 		}
+
+		if (m_bShouldStop)
+			continue;
+
 		CTAVPacketQueueGet(m_pPacketQueue, &m_packet);
 		CTAVFrame *pFrame = CTAVFrameBufferFirstAvailFrame(&m_frameBuffer);
 		if (DecodeEx(&m_packet, pFrame) == H264DEC_EC_OK)
@@ -245,7 +251,14 @@ void CTH264Decoder::Execute()
 
 		CTAVFrame *pFrame = CTAVFrameBufferFirstAvailFrame(&m_frameBuffer);
 		if (DecodeEx(&m_packet, pFrame) == H264DEC_EC_OK)
+		{
 			CTAVFrameBufferExtend(&m_frameBuffer);
+		}
+		else
+		{
+			break;
+		}
+
 	} while (1);
 
 	m_bRunning = 0;
@@ -292,7 +305,7 @@ int CTH264Decoder::OutputPixelFormat()
 
 bool CTH264Decoder::UseHardwareDecoder()
 {
-//	return false;
+	return false;
 	// try to use hardware decoder firstly
 	InputStream *ist = new InputStream();
 	assert(ist);

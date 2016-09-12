@@ -72,7 +72,7 @@ int CTPlayer::Play(const char *url)
 
 	m_display.Init(m_hwnd);
 	m_display.SetFrameBuffer(CTDISP_BUFFER_INDEX_VIDEO, m_frame_buffer);
-	m_display.SetVideoFrameFormat(m_decoder.m_outputFmt);
+	m_display.SetVideoFormat(m_decoder.m_outputFmt);
 	m_display.Start();
 	
 	m_status = CTPLAYER_STATUS_INITED;
@@ -97,6 +97,7 @@ int CTPlayer::Stop()
 	}
 
 	m_decoder.Stop();
+	m_display.Stop();
 	if (m_format_ctx != NULL) 
 		avformat_close_input(&m_format_ctx);
 	if (m_packet_queue != NULL) {
@@ -111,20 +112,29 @@ int CTPlayer::Stop()
 
 int CTPlayer::Execute()
 {
+	int end_of_file = 0;
 	m_keep_running = 1;
 	m_status = CTPLAYER_STATUS_RUNNING;
 	while (m_keep_running)
 	{
-		while (1)
+		while (!end_of_file)
 		{
-			if (av_read_frame(m_format_ctx, &m_packet) < 0)
+			if (av_read_frame(m_format_ctx, &m_packet) < 0) {
+				end_of_file = 1;
 				break;
+			}
 			if (m_packet.stream_index == m_video_idx)
 				break;
 		}
 
+		if (end_of_file) {
+			m_keep_running = 0;
+			continue;
+		}
+
 		while (CTAVPacketQueuePut(m_packet_queue, &m_packet) == CTAV_BUFFER_EC_FULL)
 		{
+			
 			CTSleep(1);
 		}
 
@@ -136,6 +146,8 @@ int CTPlayer::Execute()
 		av_packet_unref(&m_packet);	
 	}
 	m_status = CTPLAYER_STATUS_STOPPED;
+
+	Stop();
 
 	return CTPLAYER_EC_OK;
 }

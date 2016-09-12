@@ -28,7 +28,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v120</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
     <UseOfMfc>Dynamic</UseOfMfc>
   </PropertyGroup>
@@ -194,6 +194,9 @@
     <ClInclude Include="..\..\..\common\util\commutil.h" />
     <ClInclude Include="..\..\..\common\util\mbuffer.h" />
     <ClInclude Include="..\..\common\video\CTAVBuffer.h" />
+    <ClInclude Include="..\..\common\video\CTDisplay.h" />
+    <ClInclude Include="..\..\common\video\CTDisplayDefines.h" />
+    <ClInclude Include="..\..\common\video\CTDXVA2Display.h" />
     <ClInclude Include="..\..\common\video\CTH264Decoder.h" />
     <ClInclude Include="..\..\common\video\CTPlayer.h" />
     <ClInclude Include="..\..\common\video\CTSDLDisplay.h" />
@@ -226,6 +229,10 @@
     <ClCompile Include="..\..\common\video\CTAVBuffer.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\..\common\video\CTDisplay.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\..\common\video\CTDXVA2Display.cpp" />
     <ClCompile Include="..\..\common\video\CTH264Decoder.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>

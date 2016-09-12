@@ -6,6 +6,9 @@
 #include <windows.h>
 #endif
 #include "CTAVBuffer.h"
+#include "CTDisplayDefines.h"
+#include "CTSDLDisplay.h"
+
 #ifdef main
 #undef main
 #endif
@@ -15,13 +18,6 @@ typedef enum CTAVBufferIndex {
 	CTDISP_BUFFER_INDEX_AUDIO,
 	CTDISP_BUFFER_INDEX_NUM,
 } CTAVBufferIndex;
-
-#define CTDISP_WINDOW_WIDTH_DEFAULT		100
-#define CTDISP_WINDOW_HEIGHT_DEFAULT	50
-
-
-#define CTDISP_EC_OK		0
-#define CTDISP_EC_FAILURE	-1
 
 class CTDisplay
 {
@@ -34,7 +30,7 @@ public:
 	int Init(HWND hwnd);
 #endif
 	int SetFrameBuffer(CTAVBufferIndex iBufferIndex, CTAVFrameBuffer *pFrameBuffer);
-	void SetVideoFrameFormat(AVPixelFormat format);
+	void SetVideoFormat(AVPixelFormat format);
 	int Start();
 	int Stop();
 	int Execute();
@@ -57,6 +53,8 @@ private:
 	SDL_Window      *m_screen;
 	SDL_Renderer	*m_renderer;
 	SDL_Texture		*m_texture;
+
+	CTSDLDisplay	m_display;
 
 	int m_keep_running;
 	int m_is_running;

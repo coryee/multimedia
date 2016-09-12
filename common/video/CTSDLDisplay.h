@@ -10,11 +10,7 @@
 #undef main
 #endif
 
-#define CTDISP_WINDOW_WIDTH_DEFAULT		100
-#define CTDISP_WINDOW_HEIGHT_DEFAULT	50
-
-#define CTDISP_EC_OK		0
-#define CTDISP_EC_FAILURE	-1
+#include "CTDisplayDefines.h"
 
 class CTSDLDisplay
 {
@@ -26,11 +22,14 @@ public:
 #ifdef _WIN32
 	int Init(HWND hwnd);
 #endif
-	void SetVideoFrameFormat(AVPixelFormat format);
-	int SetFrameResolution(int width, int height);
+	void SetVideoFormat(AVPixelFormat format);
+	void SetFrameResolution(int width, int height);
+	void SetWindowSize(int width, int height);
+	void OnWindowSizeChanged();
 	int Display(AVFrame *frame);
 private:
-	int UpdateSettings();
+	int UpdateLayout();
+	int UpdateDisplayContext();
 private:
 	HWND m_hwnd;
 	int m_wnd_width;
@@ -49,9 +48,5 @@ private:
 	SDL_Window      *m_screen;
 	SDL_Renderer	*m_renderer;
 	SDL_Texture		*m_texture;
-	
-
-	int m_keep_running;
-	int m_is_running;
 };
 
