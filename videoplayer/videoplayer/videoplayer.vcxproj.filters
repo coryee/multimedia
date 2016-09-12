@@ -42,9 +42,6 @@
     <ClInclude Include="..\..\..\common\util\mbuffer.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\common\video\CTDisplay.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\common\video\CTPlayer.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -61,6 +58,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\common\thread\mutexutil.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\video\CTSDLDisplay.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
@@ -83,9 +83,6 @@
     <ClCompile Include="..\..\..\common\util\mbuffer.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\common\video\CTDisplay.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\common\video\CTPlayer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -102,6 +99,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\common\thread\mutex_win.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\video\CTSDLDisplay.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
