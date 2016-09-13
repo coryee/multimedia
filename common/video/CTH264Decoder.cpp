@@ -222,16 +222,12 @@ void CTH264Decoder::Execute()
 	m_bRunning = 1;
 	while (!m_bShouldStop)
 	{
-		while (CTAVPacketQueueNumItems(m_pPacketQueue) <= 0 || 
+		if (CTAVPacketQueueNumItems(m_pPacketQueue) <= 0 || 
 			CTAVFrameBufferNumAvailFrames(&m_frameBuffer) <= 0)
 		{
-			if (m_bShouldStop)
-				break;
 			CTSleep(1); // just sleep for one millisecond to release cpu time slice.
-		}
-
-		if (m_bShouldStop)
 			continue;
+		}
 
 		CTAVPacketQueueGet(m_pPacketQueue, &m_packet);
 		CTAVFrame *pFrame = CTAVFrameBufferFirstAvailFrame(&m_frameBuffer);
@@ -250,15 +246,9 @@ void CTH264Decoder::Execute()
 			break;
 
 		CTAVFrame *pFrame = CTAVFrameBufferFirstAvailFrame(&m_frameBuffer);
-		if (DecodeEx(&m_packet, pFrame) == H264DEC_EC_OK)
-		{
-			CTAVFrameBufferExtend(&m_frameBuffer);
-		}
-		else
-		{
+		if (DecodeEx(&m_packet, pFrame) != H264DEC_EC_OK)
 			break;
-		}
-
+		CTAVFrameBufferExtend(&m_frameBuffer);
 	} while (1);
 
 	m_bRunning = 0;
@@ -280,11 +270,11 @@ int CTH264Decoder::Decode(AVPacket *pPacket, AVFrame *pFrame)
 
 	if (iGotFrame)
 	{
-		if (m_bHWAccel)
-		{
-			if (0 != dxva2_retrieve_data_call(m_pCodecCtx, pFrame))
-				return H264DEC_EC_FAILURE;
-		}
+// 		if (m_bHWAccel)
+// 		{
+// 			if (0 != dxva2_retrieve_data_call(m_pCodecCtx, pFrame))
+// 				return H264DEC_EC_FAILURE;
+// 		}
 		if (m_pixfmt == AV_PIX_FMT_NONE)
 			m_pixfmt = m_pCodecCtx->pix_fmt;
 		return H264DEC_EC_OK;
@@ -305,7 +295,7 @@ int CTH264Decoder::OutputPixelFormat()
 
 bool CTH264Decoder::UseHardwareDecoder()
 {
-	return false;
+//	return false;
 	// try to use hardware decoder firstly
 	InputStream *ist = new InputStream();
 	assert(ist);
