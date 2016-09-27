@@ -48,7 +48,6 @@ extern void CTAVPacketQueueInit(CTAVPacketQueue *q, int iQueueSize);
 extern void CTAVPacketQueueDeInit(CTAVPacketQueue *pQueue);
 extern int CTAVPacketQueueNumItems(CTAVPacketQueue *q);
 extern int CTAVPacketQueuePut(CTAVPacketQueue *q, AVPacket *pkt);
-
 // return CTAV_BUFFER_EC_OK if succeed, and put the result into the object pointed by pkt;
 //	CTAV_BUFFER_EC_NO_ITEM if there is no available packet;
 //	CTAV_BUFFER_EC_FAILURE if failed
