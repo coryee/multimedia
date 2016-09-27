@@ -10,7 +10,8 @@
 #define H264DECLog	printf
 #define H264DECDebug printf
 
-#define H264DEC_NUM_BYTES_THRESHOLD	4096
+#define H264DEC_NUM_BYTES_THRESHOLD			4096
+#define H264DEC_FRAME_BUFFER_SIZE_DEFAULT	1
 
 static int CTH264DecoderExecute(void *pH264Decoder)
 {
@@ -44,7 +45,7 @@ int CTH264Decoder::Init(CTH264DecodeMode iMode)
 
 	m_iMode = iMode;
 
-	if (CTAVFrameBufferInit(&m_frameBuffer, 10) != CTAV_BUFFER_EC_OK)
+	if (CTAVFrameBufferInit(&m_frameBuffer, H264DEC_FRAME_BUFFER_SIZE_DEFAULT) != CTAV_BUFFER_EC_OK)
 		return H264DEC_EC_FAILURE;
 
 	/* register all formats and codecs */
@@ -149,6 +150,59 @@ int CTH264Decoder::Init(AVStream *pVideoStream, CTH264DecodeMode iMode)
 	return H264DEC_EC_OK;
 }
 
+int CTH264Decoder::Init(AVStream *pVideoStream, CTH264DecodeMode iMode, void *deviceManager)
+{
+	int iResult;
+
+	if (pVideoStream == NULL)
+		return H264DEC_EC_FAILURE;
+
+	m_iMode = iMode;
+	m_pVideoStream = pVideoStream;
+
+	if (CTAVFrameBufferInit(&m_frameBuffer, 10) != CTAV_BUFFER_EC_OK)
+		return H264DEC_EC_FAILURE;
+
+	/* register all formats and codecs */
+	av_register_all();
+	m_pCodec = avcodec_find_decoder(m_pVideoStream->codec->codec_id);
+	if (!m_pCodec)
+	{
+		H264DECLog("Unsupported codec!\n");
+		return H264DEC_EC_FAILURE;
+	}
+
+	m_pCodecCtx = avcodec_alloc_context3(m_pCodec);
+	if (avcodec_copy_context(m_pCodecCtx, pVideoStream->codec) != 0)
+	{
+		H264DECLog("Couldn't copy codec context");
+		return H264DEC_EC_FAILURE;
+	}
+
+
+	m_bHWAccel = 0;
+	m_outputFmt = AV_PIX_FMT_YUV420P;
+	// 需设置成1， 在解码时avframe结构中的内存由自己控制，即avframe消费完之后需要调用av_frame_unref释放其中内存
+	m_pCodecCtx->refcounted_frames = 1;
+
+
+	if (UseHardwareDecoder(deviceManager) != H264DEC_EC_OK)
+	{
+		m_pCodecCtx->pix_fmt = m_outputFmt;
+	}
+
+	if ((iResult = avcodec_open2(m_pCodecCtx, m_pCodec, NULL)) < 0)
+	{
+		av_strerror(iResult, m_pcErrMsg, H264DEC_MAX_ERROR_MSG);
+		H264DECLog("avcodec_open2 failed, err = %s\n", m_pcErrMsg);
+		return H264DEC_EC_FAILURE;
+	}
+
+	av_init_packet(&m_packet);
+
+	return H264DEC_EC_OK;
+}
+
 
 void CTH264Decoder::DeInit()
 {
@@ -182,6 +236,13 @@ void CTH264Decoder::SetPacketQueue(CTAVPacketQueue *pPacketQueue)
 CTAVFrameBuffer *CTH264Decoder::OutputFrameBuffer()
 {
 	return &m_frameBuffer;
+}
+
+void *CTH264Decoder::GetHWAccelContext(unsigned int *uiResetToken)
+{
+	if (!m_bHWAccel)
+		return NULL;
+	return dxva2_get_device_manager(m_pHWInputStream, uiResetToken);
 }
 
 int CTH264Decoder::Start()
@@ -236,6 +297,7 @@ void CTH264Decoder::Execute()
 			CTAVFrameBufferExtend(&m_frameBuffer);
 			printf("decoded frame:%d\n", ++iFrameCount);
 		}
+		av_packet_unref(&m_packet);
 	}
 
 	/* flush cached frames */
@@ -249,6 +311,7 @@ void CTH264Decoder::Execute()
 		if (DecodeEx(&m_packet, pFrame) != H264DEC_EC_OK)
 			break;
 		CTAVFrameBufferExtend(&m_frameBuffer);
+		av_packet_unref(&m_packet);
 	} while (1);
 
 	m_bRunning = 0;
@@ -293,7 +356,7 @@ int CTH264Decoder::OutputPixelFormat()
 	return m_outputFmt;
 }
 
-bool CTH264Decoder::UseHardwareDecoder()
+bool CTH264Decoder::UseHardwareDecoder(void *device_manager)
 {
 //	return false;
 	// try to use hardware decoder firstly
@@ -304,6 +367,7 @@ bool CTH264Decoder::UseHardwareDecoder()
 	ist->hwaccel_device = "dxva2";
 	ist->dec = m_pCodec;
 	ist->dec_ctx = m_pCodecCtx;
+	ist->device_manager = device_manager;
 	m_pCodecCtx->opaque = ist;
 	if (0 == dxva2_init(m_pCodecCtx)) // success
 	{

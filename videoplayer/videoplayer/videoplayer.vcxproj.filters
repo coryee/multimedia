@@ -72,6 +72,9 @@
     <ClInclude Include="..\..\common\video\CTDXVA2Display.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\common\video\CTVideoUtil.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="videoplayer.cpp">
@@ -117,6 +120,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\common\video\CTDXVA2Display.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\video\CTVideoUtil.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -379,7 +379,9 @@ void CvideoplayerDlg::OnBnClickedPlay()
 	printf("start\n");
 	player.SetHandle(this->GetDlgItem(IDC_SCREEN)->GetSafeHwnd());
 	// player.Play("udp://10.0.70.189:10001");
-	//player.Play("E:\\testfile\\dj_good_4k.mp4");
-	player.Play("E:\\work\\codebase\\multimedia\\data\\When_You_Believe.mp4");
+	// dj_good_4k.mp4,	videoplayback_720.mp4
+	// player.Play("E:\\testfile\\dj_good_4k.mp4");
+	//player.Play("E:\\work\\codebase\\multimedia\\data\\When_You_Believe.mp4");
+	player.Play("udp://172.16.130.248:1234");
 
 }

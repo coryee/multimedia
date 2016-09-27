@@ -42,6 +42,7 @@ public:
 
 	// use h264 hardware decoder if possible
 	int Init(AVStream *pVideoStream, CTH264DecodeMode iMode);
+	int Init(AVStream *pVideoStream, CTH264DecodeMode iMode, void *deviceManager);
 	void DeInit();
 
 	// decode a packet.
@@ -52,6 +53,7 @@ public:
 	// the following three methods are used only in H264DEC_MODE_PACKETQUEUE mode
 	void SetPacketQueue(CTAVPacketQueue *pPacketQueue);
 	CTAVFrameBuffer *OutputFrameBuffer();
+	void *GetHWAccelContext(unsigned int *uiResetToken);
 	int Start();
 	int Stop();
 	void Execute();
@@ -59,7 +61,7 @@ public:
 	int IsHardwareAccelerated();
 
 private:
-	bool UseHardwareDecoder();
+	bool UseHardwareDecoder(void *device_manager = NULL);
 	int DecodeEx(AVPacket *pPacket, CTAVFrame *pFrame);
 	double SynchronizeVideo(AVFrame *pSrcFrame, double pts);
 

@@ -135,10 +135,16 @@ typedef struct InputStream {
     // number of frames/samples retrieved from the decoder
     uint64_t frames_decoded;
     uint64_t samples_decoded;
+
+
+	void *device_manager;
+	int frame_width_default;
+	int frame_height_default;
 } InputStream;
 
 
 int dxva2_init(AVCodecContext *s);
 // frame : in-out param.
 int dxva2_retrieve_data_call(AVCodecContext *s, AVFrame *frame);
+void* dxva2_get_device_manager(InputStream *ist, UINT *reset_token);
 #endif /* FFMPEG_DXVA2_H */

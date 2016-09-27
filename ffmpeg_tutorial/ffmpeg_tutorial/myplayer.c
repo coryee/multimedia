@@ -167,6 +167,16 @@ can be global in case we need it. */
 VideoState *global_video_state;
 
 
+static FILE _iob[3];
+
+FILE *__cdecl __iob_func(void)
+{
+	_iob[0] = *stdin;
+	_iob[1] = *stdout;
+	_iob[2] = *stderr;
+	return _iob;
+}
+
 void print_log(const char *log)
 {
 	fwrite(log, 1, strlen(log), fdLog);

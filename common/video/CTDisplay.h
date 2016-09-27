@@ -8,6 +8,7 @@
 #include "CTAVBuffer.h"
 #include "CTDisplayDefines.h"
 #include "CTSDLDisplay.h"
+#include "CTDXVA2Display.h"
 
 #ifdef main
 #undef main
@@ -25,11 +26,13 @@ public:
 	CTDisplay();
 	~CTDisplay();
 
-	int Init();
+	int Init(int is_hardware_accelerated = 0);
 #ifdef _WIN32
-	int Init(HWND hwnd);
+	int Init(HWND hwnd, int is_hardware_accelerated = 0);
 #endif
-	int SetFrameBuffer(CTAVBufferIndex iBufferIndex, CTAVFrameBuffer *pFrameBuffer);
+	int SetDeviceManager(void *device_manager, unsigned int reset_token);
+	void *DeviceManager();
+	int SetFrameBuffer(CTAVBufferIndex buffer_index, CTAVFrameBuffer *frame_buffer);
 	void SetVideoFormat(AVPixelFormat format);
 	int Start();
 	int Stop();
@@ -40,21 +43,14 @@ private:
 
 private:
 	HWND m_hwnd;
-	int m_wnd_width;
-	int m_wnd_height;
-	int m_frame_width;
-	int m_frame_height;
-	int m_disp_width;
-	int m_disp_height;
 	CTAVFrameBuffer *m_frame_buffers[CTDISP_BUFFER_INDEX_NUM];
-
 	AVPixelFormat  m_video_format;
-	struct SwsContext *m_img_convert_ctx;
-	SDL_Window      *m_screen;
-	SDL_Renderer	*m_renderer;
-	SDL_Texture		*m_texture;
+	IDirect3DDeviceManager9 *m_device_manager;
+	unsigned int m_reset_token;
+	int				m_is_hardware_accelerated;
 
-	CTSDLDisplay	m_display;
+	CTSDLDisplay	m_sdl_display;
+	CTDXVA2Display	m_dxva_display;
 
 	int m_keep_running;
 	int m_is_running;

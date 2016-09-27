@@ -29,7 +29,9 @@ CTDisplay::CTDisplay()
 	m_hwnd = 0;
 	memset(m_frame_buffers, 0, sizeof(CTAVFrameBuffer *)*CTDISP_BUFFER_INDEX_NUM);
 	m_video_format = AV_PIX_FMT_YUV420P;
-	m_img_convert_ctx = NULL;
+	m_is_hardware_accelerated = 0;
+	m_device_manager = NULL;
+	m_reset_token = 0;
 	m_keep_running = 0;
 	m_is_running = 0;
 }
@@ -39,18 +41,41 @@ CTDisplay::~CTDisplay()
 {
 }
 
-int CTDisplay::Init()
+int CTDisplay::Init(int is_hardware_accelerated)
 {
-	return Init(0);
+	return Init(0, is_hardware_accelerated);
 }
 
 #ifdef _WIN32
-int CTDisplay::Init(HWND hwnd)
+int CTDisplay::Init(HWND hwnd, int is_hardware_accelerated)
 {
 	m_hwnd = hwnd;
-	return m_display.Init(m_hwnd);
+	m_is_hardware_accelerated = is_hardware_accelerated;
+
+	m_is_hardware_accelerated = 1;
+	if (m_is_hardware_accelerated) {
+		return m_dxva_display.Init(m_hwnd);
+	}
+	else {
+		m_sdl_display.SetVideoFormat(m_video_format);
+		return m_sdl_display.Init(m_hwnd);
+	}
+
+	return CTDISP_EC_OK;
 }
 #endif
+
+int CTDisplay::SetDeviceManager(void *device_manager, unsigned int reset_token)
+{
+	m_device_manager = (IDirect3DDeviceManager9 *)device_manager;
+	m_reset_token = reset_token;
+	return CTDISP_EC_OK;
+}
+
+void* CTDisplay::DeviceManager()
+{
+	return (void *)m_dxva_display.DeviceManager();
+}
 
 int CTDisplay::SetFrameBuffer(CTAVBufferIndex iBufferIndex, CTAVFrameBuffer *pFrameBuffer)
 {
@@ -64,11 +89,21 @@ int CTDisplay::SetFrameBuffer(CTAVBufferIndex iBufferIndex, CTAVFrameBuffer *pFr
 void CTDisplay::SetVideoFormat(AVPixelFormat format)
 {
 	m_video_format = format;
-	m_display.SetVideoFormat(format);
 }
 
 int CTDisplay::Start()
 {
+	int ret;
+	if (m_is_hardware_accelerated) {
+		// ret = m_dxva_display.Init(m_hwnd);
+	}
+	else {
+		m_sdl_display.SetVideoFormat(m_video_format);
+		// ret = m_sdl_display.Init(m_hwnd);
+	}
+// 	if (ret != CTDISP_EC_OK)
+// 		return ret;
+
 	CTThreadHandle handle;
 	if (CTCreateThread(&handle, (CTThreadFunc)CTDisplayExecute, this) != 0)
 		return CTDISP_EC_FAILURE;
@@ -100,8 +135,14 @@ int CTDisplay::Execute()
 		}
 
 		CTAVFrame *ctframe = CTAVFrameBufferFirstFrame(video_frame_buffer);
-		
-		m_display.Display(ctframe->pFrame);
+	
+		if (m_is_hardware_accelerated) {
+			m_dxva_display.SetFrameResolution(ctframe->pFrame->width, ctframe->pFrame->height);
+			m_dxva_display.Display((IDirect3DSurface9 *)ctframe->pFrame->data[3]);
+		}
+		else {
+			m_sdl_display.Display(ctframe->pFrame);
+		}
 		
 		av_frame_unref(ctframe->pFrame);
 		// CTSleep(30);

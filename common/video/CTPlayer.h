@@ -19,6 +19,8 @@ extern "C"
 #include "CTAVBuffer.h"
 #include "CTDisplay.h"
 
+#define CTPLAYER_MAX_URL		256
+
 #define CTPLAYER_EC_OK			0
 #define CTPLAYER_EC_FAILURE		-1
 
@@ -45,9 +47,10 @@ public:
 	int Stop();
 	int Execute();
 private:
-	int Init(const char *url);
+	int Init();
 	
 private:
+	char m_url[CTPLAYER_MAX_URL];
 	AVFormatContext	*m_format_ctx;
 	AVPacket	m_packet;
 	int m_video_idx;

@@ -139,6 +139,7 @@ INT MessageLoop()
 
 static CTDXVA2Display disp;
 
+
 int main()
 {
 	INT wParam = 0;
@@ -147,6 +148,7 @@ int main()
 		InitializeTimer())
 	{
 		disp.Init(g_Hwnd);
+		disp.SetFrameResolution(1080, 720);
 		disp.Display(NULL);
 		wParam = MessageLoop();
 	}

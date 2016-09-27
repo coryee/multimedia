@@ -101,6 +101,7 @@ extern "C"
         IDirect3D9                  *d3d9;
         IDirect3DDevice9            *d3d9device;
         IDirect3DDeviceManager9     *d3d9devmgr;
+		UINT						 reset_token;
         IDirectXVideoDecoderService *decoder_service;
         IDirectXVideoDecoder        *decoder;
 
@@ -324,75 +325,84 @@ extern "C"
             return AVERROR(ENOMEM);
 
         ctx->deviceHandle = INVALID_HANDLE_VALUE;
+		ctx->d3d9devmgr = (IDirect3DDeviceManager9 *)ist->device_manager;
 
         ist->hwaccel_ctx = ctx;
         ist->hwaccel_uninit = dxva2_uninit;
         ist->hwaccel_get_buffer = dxva2_get_buffer;
         ist->hwaccel_retrieve_data = dxva2_retrieve_data;
+		if (ist->frame_width_default <= 0)
+		{
+			ist->frame_width_default = 4096;
+			ist->frame_height_default = 2048;
+		}
 
-        ctx->d3dlib = LoadLibrary("d3d9.dll");
-        if (!ctx->d3dlib) {
-            av_log(NULL, loglevel, "Failed to load D3D9 library\n");
-            goto fail;
-        }
-        ctx->dxva2lib = LoadLibrary("dxva2.dll");
-        if (!ctx->dxva2lib) {
-            av_log(NULL, loglevel, "Failed to load DXVA2 library\n");
-            goto fail;
-        }
 
-        createD3D = (pDirect3DCreate9 *)GetProcAddress(ctx->d3dlib, "Direct3DCreate9");
-        if (!createD3D) {
-            av_log(NULL, loglevel, "Failed to locate Direct3DCreate9\n");
-            goto fail;
-        }
-        createDeviceManager = (pCreateDeviceManager9 *)GetProcAddress(ctx->dxva2lib, "DXVA2CreateDirect3DDeviceManager9");
-        if (!createDeviceManager) {
-            av_log(NULL, loglevel, "Failed to locate DXVA2CreateDirect3DDeviceManager9\n");
-            goto fail;
-        }
+		if (ctx->d3d9devmgr == NULL)
+		{
+			ctx->d3dlib = LoadLibrary("d3d9.dll");
+			if (!ctx->d3dlib) {
+				av_log(NULL, loglevel, "Failed to load D3D9 library\n");
+				goto fail;
+			}
+			ctx->dxva2lib = LoadLibrary("dxva2.dll");
+			if (!ctx->dxva2lib) {
+				av_log(NULL, loglevel, "Failed to load DXVA2 library\n");
+				goto fail;
+			}
 
-        ctx->d3d9 = createD3D(D3D_SDK_VERSION);
-        if (!ctx->d3d9) {
-            av_log(NULL, loglevel, "Failed to create IDirect3D object\n");
-            goto fail;
-        }
+			createD3D = (pDirect3DCreate9 *)GetProcAddress(ctx->d3dlib, "Direct3DCreate9");
+			if (!createD3D) {
+				av_log(NULL, loglevel, "Failed to locate Direct3DCreate9\n");
+				goto fail;
+			}
+			createDeviceManager = (pCreateDeviceManager9 *)GetProcAddress(ctx->dxva2lib, "DXVA2CreateDirect3DDeviceManager9");
+			if (!createDeviceManager) {
+				av_log(NULL, loglevel, "Failed to locate DXVA2CreateDirect3DDeviceManager9\n");
+				goto fail;
+			}
 
-        if (ist->hwaccel_device) {
-            adapter = atoi(ist->hwaccel_device);
-            av_log(NULL, AV_LOG_INFO, "Using HWAccel device %d\n", adapter);
-        }
+			ctx->d3d9 = createD3D(D3D_SDK_VERSION);
+			if (!ctx->d3d9) {
+				av_log(NULL, loglevel, "Failed to create IDirect3D object\n");
+				goto fail;
+			}
 
-        IDirect3D9_GetAdapterDisplayMode(ctx->d3d9, adapter, &d3ddm);
-        d3dpp.Windowed = TRUE;
-        d3dpp.BackBufferWidth = 640;
-        d3dpp.BackBufferHeight = 480;
-        d3dpp.BackBufferCount = 0;
-        d3dpp.BackBufferFormat = d3ddm.Format;
-        d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-        d3dpp.Flags = D3DPRESENTFLAG_VIDEO;
+			if (ist->hwaccel_device) {
+				adapter = atoi(ist->hwaccel_device);
+				av_log(NULL, AV_LOG_INFO, "Using HWAccel device %d\n", adapter);
+			}
 
-        hr = IDirect3D9_CreateDevice(ctx->d3d9, adapter, D3DDEVTYPE_HAL, GetDesktopWindow(),
-            D3DCREATE_SOFTWARE_VERTEXPROCESSING | D3DCREATE_MULTITHREADED | D3DCREATE_FPU_PRESERVE,
-            &d3dpp, &ctx->d3d9device);
-        if (FAILED(hr)) {
-            av_log(NULL, loglevel, "Failed to create Direct3D device\n");
-            goto fail;
-        }
+			IDirect3D9_GetAdapterDisplayMode(ctx->d3d9, adapter, &d3ddm);
+			d3dpp.Windowed = TRUE;
+			d3dpp.BackBufferWidth = 640;
+			d3dpp.BackBufferHeight = 480;
+			d3dpp.BackBufferCount = 0;
+			d3dpp.BackBufferFormat = d3ddm.Format;
+			d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+			d3dpp.Flags = D3DPRESENTFLAG_VIDEO;
 
-        hr = createDeviceManager(&resetToken, &ctx->d3d9devmgr);
-        if (FAILED(hr)) {
-            av_log(NULL, loglevel, "Failed to create Direct3D device manager\n");
-            goto fail;
-        }
+			hr = IDirect3D9_CreateDevice(ctx->d3d9, adapter, D3DDEVTYPE_HAL, GetDesktopWindow(),
+				D3DCREATE_SOFTWARE_VERTEXPROCESSING | D3DCREATE_MULTITHREADED | D3DCREATE_FPU_PRESERVE,
+				&d3dpp, &ctx->d3d9device);
+			if (FAILED(hr)) {
+				av_log(NULL, loglevel, "Failed to create Direct3D device\n");
+				goto fail;
+			}
 
-        //hr = IDirect3DDeviceManager9_ResetDevice(ctx->d3d9devmgr, ctx->d3d9device, resetToken);
-        hr = ctx->d3d9devmgr->ResetDevice(ctx->d3d9device, resetToken);
-        if (FAILED(hr)) {
-            av_log(NULL, loglevel, "Failed to bind Direct3D device to device manager\n");
-            goto fail;
-        }
+			hr = createDeviceManager(&ctx->reset_token, &ctx->d3d9devmgr);
+			if (FAILED(hr)) {
+				av_log(NULL, loglevel, "Failed to create Direct3D device manager\n");
+				goto fail;
+			}
 
+			//hr = IDirect3DDeviceManager9_ResetDevice(ctx->d3d9devmgr, ctx->d3d9device, resetToken);
+			hr = ctx->d3d9devmgr->ResetDevice(ctx->d3d9device, ctx->reset_token);
+			if (FAILED(hr)) {
+				av_log(NULL, loglevel, "Failed to bind Direct3D device to device manager\n");
+				goto fail;
+			}
+		}
         //hr = IDirect3DDeviceManager9_OpenDeviceHandle(ctx->d3d9devmgr, &ctx->deviceHandle);
         hr = ctx->d3d9devmgr->OpenDeviceHandle(&ctx->deviceHandle);
         if (FAILED(hr)) {
@@ -581,6 +591,18 @@ extern "C"
             target_format, D3DPOOL_DEFAULT, 0,
             DXVA2_VideoDecoderRenderTarget,
             ctx->surfaces, NULL);*/
+		int tmp_width;
+		int tmp_height;
+
+		if (s->coded_width > 0)
+		{
+			tmp_width = FFALIGN(s->coded_width, surface_alignment);
+			tmp_height = FFALIGN(s->coded_height, surface_alignment);
+		}
+		else {
+			tmp_width = FFALIGN(ist->frame_width_default, surface_alignment);
+			tmp_height = FFALIGN(ist->frame_height_default, surface_alignment);
+		}
         hr = ctx->decoder_service->CreateSurface(FFALIGN(s->coded_width, surface_alignment),
             FFALIGN(s->coded_height, surface_alignment),
             ctx->num_surfaces - 1,
@@ -656,3 +678,10 @@ extern "C"
     {
         return dxva2_retrieve_data(s, frame);
     }
+
+	void* dxva2_get_device_manager(InputStream *ist, UINT *reset_token)
+	{
+		DXVA2Context *ctx = (DXVA2Context *)ist->hwaccel_ctx;
+		*reset_token = ctx->reset_token;
+		return ctx->d3d9devmgr;
+	}

@@ -53,28 +53,13 @@ int CTPlayer::SetHandle(HWND hwnd)
 
 int CTPlayer::Play(const char *url)
 {
-	int ret;
-	
-	ret = Init(url);
-	if (CTPLAYER_EC_OK != ret) {
+	CTStrncpy(m_url, url, CTPLAYER_MAX_URL);
+
+
+	int ret = Init();
+	if (CTPLAYER_EC_OK != ret)
 		return ret;
-	}
 
-	m_decoder.SetPacketQueue(m_packet_queue);
-	m_decoder.Start();
-	
-	
-
-	// test
-// 	ThreadHandle thread;
-// 	CTCreateThread(&thread, (ThreadFunc)readDataFromFile, &m_sys_buffer);
-
-
-	m_display.Init(m_hwnd);
-	m_display.SetFrameBuffer(CTDISP_BUFFER_INDEX_VIDEO, m_frame_buffer);
-	m_display.SetVideoFormat(m_decoder.m_outputFmt);
-	m_display.Start();
-	
 	m_status = CTPLAYER_STATUS_INITED;
 
 	CTThreadHandle thread;
@@ -112,6 +97,11 @@ int CTPlayer::Stop()
 
 int CTPlayer::Execute()
 {
+	//int ret = Init();
+	//if (CTPLAYER_EC_OK != ret)
+	//	return ret;
+	
+
 	int end_of_file = 0;
 	m_keep_running = 1;
 	m_status = CTPLAYER_STATUS_RUNNING;
@@ -152,11 +142,11 @@ int CTPlayer::Execute()
 	return CTPLAYER_EC_OK;
 }
 
-int CTPlayer::Init(const char *url)
+int CTPlayer::Init()
 {
 	av_register_all();
 	m_format_ctx = avformat_alloc_context();
-	if (avformat_open_input(&m_format_ctx, url, NULL, NULL) != 0) {
+	if (avformat_open_input(&m_format_ctx, m_url, NULL, NULL) != 0) {
 		CTPlayerError("Couldn't open input stream.\n");
 		return CTPLAYER_EC_FAILURE;
 	}
@@ -167,12 +157,12 @@ int CTPlayer::Init(const char *url)
 
 	m_video_idx = -1;
 	for (int i = 0; i < m_format_ctx->nb_streams; i++) {
-		if (m_format_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO){
+		if (m_format_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
 			m_video_idx = i;
 			break;
 		}
 	}
-	if (m_video_idx == -1){
+	if (m_video_idx == -1) {
 		CTPlayerError("Didn't find a video stream.\n");
 		return CTPLAYER_EC_FAILURE;
 	}
@@ -183,12 +173,29 @@ int CTPlayer::Init(const char *url)
 		return CTPLAYER_EC_FAILURE;
 	}
 	CTAVPacketQueueInit(m_packet_queue, CTPLAYER_MAX_PACKETQUEUE_SIZE);
+
+
+	m_display.Init(m_hwnd, m_decoder.IsHardwareAccelerated());
 	if (H264DEC_EC_FAILURE ==
-		m_decoder.Init(m_format_ctx->streams[m_video_idx], H264DEC_MODE_PACKETQUEUE)) {
+		m_decoder.Init(m_format_ctx->streams[m_video_idx], H264DEC_MODE_PACKETQUEUE, m_display.DeviceManager())) {
 		CTPlayerError("Can't initialize decoder\n");
 		return CTPLAYER_EC_FAILURE;
 	}
+	m_decoder.SetPacketQueue(m_packet_queue);
 	m_frame_buffer = m_decoder.OutputFrameBuffer();
+
+	// test
+	// 	ThreadHandle thread;
+	// 	CTCreateThread(&thread, (ThreadFunc)readDataFromFile, &m_sys_buffer);
+
+	// 	unsigned int reset_token;
+	// 	void *hw_ctx = m_decoder.GetHWAccelContext(&reset_token);
+	//	m_display.SetDeviceManager(hw_ctx, reset_token);
+	m_display.SetFrameBuffer(CTDISP_BUFFER_INDEX_VIDEO, m_frame_buffer);
+	m_display.SetVideoFormat(m_decoder.m_outputFmt);
+
+	m_decoder.Start();
+	m_display.Start();
 
 	return CTPLAYER_EC_OK;
 }

@@ -1,55 +1,35 @@
 #include "CTDXVA2Display.h"
+#include "CTVideoUtil.h"
 #include <stdio.h>
 #include <mmsyscom.h>
+#include <strsafe.h>
 
 #define CTDXVA2DISPInfo		printf
 #define CTDXVA2DISPError	printf
-#define DBGMSG(x)  // {DbgPrint(TEXT("%s(%u) : "), TEXT(__FILE__), __LINE__); DbgPrint x;}
+#define DBGMSG(x) {DbgPrint(TEXT("%s(%u) : "), TEXT(__FILE__), __LINE__); DbgPrint x;}
+#define DXVA2DISPDEBUG
 
-// TODO: delete color definitions
-//
-// Studio RGB [16...235] colors.
-//
-
-// 100%
-const D3DCOLOR RGB_WHITE = D3DCOLOR_XRGB(0xEB, 0xEB, 0xEB);
-const D3DCOLOR RGB_RED = D3DCOLOR_XRGB(0xEB, 0x10, 0x10);
-const D3DCOLOR RGB_YELLOW = D3DCOLOR_XRGB(0xEB, 0xEB, 0x10);
-const D3DCOLOR RGB_GREEN = D3DCOLOR_XRGB(0x10, 0xEB, 0x10);
-const D3DCOLOR RGB_CYAN = D3DCOLOR_XRGB(0x10, 0xEB, 0xEB);
-const D3DCOLOR RGB_BLUE = D3DCOLOR_XRGB(0x10, 0x10, 0xEB);
-const D3DCOLOR RGB_MAGENTA = D3DCOLOR_XRGB(0xEB, 0x10, 0xEB);
-const D3DCOLOR RGB_BLACK = D3DCOLOR_XRGB(0x10, 0x10, 0x10);
-const D3DCOLOR RGB_ORANGE = D3DCOLOR_XRGB(0xEB, 0x7E, 0x10);
-
-// 75%
-const D3DCOLOR RGB_WHITE_75pc = D3DCOLOR_XRGB(0xB4, 0xB4, 0xB4);
-const D3DCOLOR RGB_YELLOW_75pc = D3DCOLOR_XRGB(0xB4, 0xB4, 0x10);
-const D3DCOLOR RGB_CYAN_75pc = D3DCOLOR_XRGB(0x10, 0xB4, 0xB4);
-const D3DCOLOR RGB_GREEN_75pc = D3DCOLOR_XRGB(0x10, 0xB4, 0x10);
-const D3DCOLOR RGB_MAGENTA_75pc = D3DCOLOR_XRGB(0xB4, 0x10, 0xB4);
-const D3DCOLOR RGB_RED_75pc = D3DCOLOR_XRGB(0xB4, 0x10, 0x10);
-const D3DCOLOR RGB_BLUE_75pc = D3DCOLOR_XRGB(0x10, 0x10, 0xB4);
-
-// -4% / +4%
-const D3DCOLOR RGB_BLACK_n4pc = D3DCOLOR_XRGB(0x07, 0x07, 0x07);
-const D3DCOLOR RGB_BLACK_p4pc = D3DCOLOR_XRGB(0x18, 0x18, 0x18);
-
-// -Inphase / +Quadrature
-const D3DCOLOR RGB_I = D3DCOLOR_XRGB(0x00, 0x1D, 0x42);
-const D3DCOLOR RGB_Q = D3DCOLOR_XRGB(0x2C, 0x00, 0x5C);
-
-const D3DCOLOR BACKGROUND_COLORS[] =
+VOID DbgPrint(PCTSTR format, ...)
 {
-	RGB_WHITE, RGB_RED,  RGB_YELLOW,  RGB_GREEN,
-	RGB_CYAN,  RGB_BLUE, RGB_MAGENTA, RGB_BLACK
-};
-// end delete
+	va_list args;
+	va_start(args, format);
 
-INT g_BackgroundColor = 0;
+	TCHAR string[MAX_PATH];
+
+	if (SUCCEEDED(StringCbVPrintf(string, sizeof(string), format, args)))
+	{
+		OutputDebugString(string);
+	}
+	else
+	{
+		DebugBreak();
+	}
+}
+
+
+const D3DCOLOR BACKGROUND_COLOR = RGB_BLACK; // RGB_BLACK
 
 const BYTE DEFAULT_PLANAR_ALPHA_VALUE = 0xFF;
-WORD g_PlanarAlphaValue = DEFAULT_PLANAR_ALPHA_VALUE;
 
 const UINT VIDEO_REQUIED_OP = DXVA2_VideoProcess_YUV2RGB |
 	DXVA2_VideoProcess_StretchX |
@@ -62,18 +42,16 @@ const D3DFORMAT VIDEO_RENDER_TARGET_FORMAT = D3DFMT_X8R8G8B8;
 const DWORD VIDEO_MAIN_FORMAT = MAKEFOURCC('N', 'V', '1', '2');
 
 const UINT BACK_BUFFER_COUNT = 1;
-const UINT SUB_STREAM_COUNT = 1;
 const UINT DWM_BUFFER_COUNT = 4;
 
 const UINT VIDEO_MAIN_WIDTH = 640;
 const UINT VIDEO_MAIN_HEIGHT = 480;
-const RECT VIDEO_MAIN_RECT = { 0, 0, VIDEO_MAIN_WIDTH, VIDEO_MAIN_HEIGHT };
-
+//const UINT VIDEO_MAIN_WIDTH = 4096;
+//const UINT VIDEO_MAIN_HEIGHT = 2048;
 
 const UINT VIDEO_FPS = 60;
 
-const UINT EX_COLOR_INFO[][2] =
-{
+const UINT EX_COLOR_INFO[][2] = {
 	// SDTV ITU-R BT.601 YCbCr to driver's optimal RGB range
 	{ DXVA2_VideoTransferMatrix_BT601, DXVA2_NominalRange_Unknown },
 	// SDTV ITU-R BT.601 YCbCr to studio RGB [16...235]
@@ -88,24 +66,10 @@ const UINT EX_COLOR_INFO[][2] =
 	{ DXVA2_VideoTransferMatrix_BT709, DXVA2_NominalRange_0_255 }
 };
 
-
-//
 // Type definitions.
-//
-
-typedef HRESULT(WINAPI * PFNDWMISCOMPOSITIONENABLED)(
-	__out BOOL* pfEnabled
-	);
-
-typedef HRESULT(WINAPI * PFNDWMGETCOMPOSITIONTIMINGINFO)(
-	__in HWND hwnd,
-	__out DWM_TIMING_INFO* pTimingInfo
-	);
-
-typedef HRESULT(WINAPI * PFNDWMSETPRESENTPARAMETERS)(
-	__in HWND hwnd,
-	__inout DWM_PRESENT_PARAMETERS* pPresentParams
-	);
+typedef HRESULT(WINAPI * PFNDWMISCOMPOSITIONENABLED)(__out BOOL* pfEnabled);
+typedef HRESULT(WINAPI * PFNDWMGETCOMPOSITIONTIMINGINFO)(__in HWND hwnd, __out DWM_TIMING_INFO* pTimingInfo);
+typedef HRESULT(WINAPI * PFNDWMSETPRESENTPARAMETERS)(__in HWND hwnd, __inout DWM_PRESENT_PARAMETERS* pPresentParams);
 
 static INT ComputeLongSteps(DXVA2_ValueRange &range)
 {
@@ -123,449 +87,7 @@ static INT ComputeLongSteps(DXVA2_ValueRange &range)
 	return max(steps, 1);
 }
 
-DWORD RGBtoYUV(const D3DCOLOR rgb)
-{
-	const INT A = HIBYTE(HIWORD(rgb));
-	const INT R = LOBYTE(HIWORD(rgb)) - 16;
-	const INT G = HIBYTE(LOWORD(rgb)) - 16;
-	const INT B = LOBYTE(LOWORD(rgb)) - 16;
-
-	//
-	// studio RGB [16...235] to SDTV ITU-R BT.601 YCbCr
-	//
-	INT Y = (77 * R + 150 * G + 29 * B + 128) / 256 + 16;
-	INT U = (-44 * R - 87 * G + 131 * B + 128) / 256 + 128;
-	INT V = (131 * R - 110 * G - 21 * B + 128) / 256 + 128;
-
-	return D3DCOLOR_AYUV(A, Y, U, V);
-}
-
-static DWORD RGBtoYUY2(const D3DCOLOR rgb)
-{
-	const D3DCOLOR yuv = RGBtoYUV(rgb);
-
-	const BYTE Y = LOBYTE(HIWORD(yuv));
-	const BYTE U = HIBYTE(LOWORD(yuv));
-	const BYTE V = LOBYTE(LOWORD(yuv));
-
-	return MAKELONG(MAKEWORD(Y, U), MAKEWORD(Y, V));
-}
-
-static VOID RGBtoYUY(const D3DCOLOR rgb, BYTE *Y, BYTE *U, BYTE *V)
-{
-	const D3DCOLOR yuv = RGBtoYUV(rgb);
-
-	*Y = LOBYTE(HIWORD(yuv));
-	*U = HIBYTE(LOWORD(yuv));
-	*V = LOBYTE(LOWORD(yuv));
-
-}
-
-CTDXVA2Display::CTDXVA2Display()
-{
-	g_Hwnd = NULL;
-	g_bWindowed = 1;
-	g_bInModeChange = FALSE;
-	g_RectWindow = { 0 };
-	g_TargetWidthPercent = 100;
-	g_TargetHeightPercent = 100;
-	g_bDwmQueuing = FALSE;
-
-	g_bD3D9HW = TRUE;
-	g_bDXVA2HW = TRUE;
-
-	g_pD3D9 = NULL;
-	g_pD3DD9 = NULL;
-	g_pD3DRT = NULL;
-	memset(&g_D3DPP, 0, sizeof(g_D3DPP));
-	
-	g_pDXVAVPS = NULL;
-	g_pDXVAVPD = NULL;
-
-	g_pMainStream = NULL;
-	g_SrcRect = VIDEO_MAIN_RECT;
-	g_DstRect = VIDEO_MAIN_RECT;
-
-
-	g_GuidVP = { 0 };
-	g_VideoDesc = { 0 };
-	g_VPCaps = { 0 };
-
-	g_ExColorInfo = 0;
-	memset(g_ProcAmpRanges, 0, sizeof(g_ProcAmpRanges));
-	memset(g_ProcAmpValues, 0, sizeof(g_ProcAmpValues));
-	memset(g_ProcAmpSteps, 0, sizeof(g_ProcAmpSteps));
-	
-}
-
-
-CTDXVA2Display::~CTDXVA2Display()
-{
-}
-
-int CTDXVA2Display::Init(HWND hwnd)
-{
-	g_Hwnd = hwnd;
-	if (InitializeModule() &&
-		InitializeD3D9() &&
-		InitializeDXVA2())
-	{
-		return CTDXVADISP_EC_OK;
-	}
-
-	return CTDXVADISP_EC_FAILURE;
-}
-
-int CTDXVA2Display::Display(IDirect3DSurface9 *surface)
-{
-
-	ProcessVideo();
-	return CTDXVADISP_EC_OK;
-}
-
-BOOL CTDXVA2Display::InitializeModule()
-{
-	//
-	// Load these DLLs dynamically because these may not be available prior to Vista.
-	//
-	m_rgb9rast_dll = LoadLibrary(TEXT("rgb9rast.dll"));
-	if (!m_rgb9rast_dll) {
-		CTDXVA2DISPError("LoadLibrary(rgb9rast.dll) failed with error %d.\n", GetLastError());
-	}
-
-	g_hDwmApiDLL = LoadLibrary(TEXT("dwmapi.dll"));
-	if (!g_hDwmApiDLL) {
-		CTDXVA2DISPError("LoadLibrary(dwmapi.dll) failed with error %d.\n", GetLastError());
-		goto SKIP_DWMAPI;
-	}
-
-	g_pfnDwmIsCompositionEnabled = GetProcAddress(g_hDwmApiDLL, "DwmIsCompositionEnabled");
-	if (!g_pfnDwmIsCompositionEnabled) {
-		CTDXVA2DISPError("GetProcAddress(DwmIsCompositionEnabled) failed with error %d.\n", GetLastError());
-		return FALSE;
-	}
-
-	g_pfnDwmGetCompositionTimingInfo = GetProcAddress(g_hDwmApiDLL, "DwmGetCompositionTimingInfo");
-	if (!g_pfnDwmGetCompositionTimingInfo) {
-		CTDXVA2DISPError("GetProcAddress(DwmGetCompositionTimingInfo) failed with error %d.\n", GetLastError());
-		return FALSE;
-	}
-
-	g_pfnDwmSetPresentParameters = GetProcAddress(g_hDwmApiDLL, "DwmSetPresentParameters");
-	if (!g_pfnDwmSetPresentParameters) {
-		CTDXVA2DISPError("GetProcAddress(DwmSetPresentParameters) failed with error %d.\n", GetLastError());
-		return FALSE;
-	}
-
-SKIP_DWMAPI:
-
-	return TRUE;
-}
-
-BOOL CTDXVA2Display::InitializeD3D9()
-{
-	HRESULT hr;
-
-	g_pD3D9 = Direct3DCreate9(D3D_SDK_VERSION);
-
-	if (!g_pD3D9)
-	{
-		DBGMSG((TEXT("Direct3DCreate9 failed.\n")));
-		return FALSE;
-	}
-
-	if (g_bWindowed)
-	{
-		g_D3DPP.BackBufferWidth = 0;
-		g_D3DPP.BackBufferHeight = 0;
-	}
-	else
-	{
-		g_D3DPP.BackBufferWidth = GetSystemMetrics(SM_CXSCREEN);
-		g_D3DPP.BackBufferHeight = GetSystemMetrics(SM_CYSCREEN);
-	}
-
-	g_D3DPP.BackBufferFormat = VIDEO_RENDER_TARGET_FORMAT;
-	g_D3DPP.BackBufferCount = BACK_BUFFER_COUNT;
-	g_D3DPP.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	g_D3DPP.hDeviceWindow = g_Hwnd;
-	g_D3DPP.Windowed = g_bWindowed;
-	g_D3DPP.Flags = D3DPRESENTFLAG_VIDEO;
-	g_D3DPP.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
-	g_D3DPP.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
-
-
-	//
-	// First try to create a hardware D3D9 device.
-	//
-	if (g_bD3D9HW)
-	{
-		hr = g_pD3D9->CreateDevice(D3DADAPTER_DEFAULT,
-			D3DDEVTYPE_HAL,
-			g_Hwnd,
-			D3DCREATE_FPU_PRESERVE |
-			D3DCREATE_MULTITHREADED |
-			D3DCREATE_SOFTWARE_VERTEXPROCESSING,
-			&g_D3DPP,
-			&g_pD3DD9);
-
-		if (FAILED(hr))
-		{
-			DBGMSG((TEXT("CreateDevice(HAL) failed with error 0x%x.\n"), hr));
-		}
-	}
-
-	if (!g_pD3DD9)
-	{
-		return FALSE;
-	}
-
-	return TRUE;	
-}
-
-BOOL CTDXVA2Display::InitializeDXVA2()
-{
-	HRESULT hr;
-
-	//
-	// Retrieve a back buffer as the video render target.
-	//
-	hr = g_pD3DD9->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &g_pD3DRT);
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("GetBackBuffer failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	//
-	// Create DXVA2 Video Processor Service.
-	//
-	hr = DXVA2CreateVideoService(g_pD3DD9,
-		IID_IDirectXVideoProcessorService,
-		(VOID**)&g_pDXVAVPS);
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("DXVA2CreateVideoService failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	//
-	// Initialize the video descriptor.
-	//
-	g_VideoDesc.SampleWidth = VIDEO_MAIN_WIDTH;
-	g_VideoDesc.SampleHeight = VIDEO_MAIN_HEIGHT;
-	g_VideoDesc.SampleFormat.VideoChromaSubsampling = DXVA2_VideoChromaSubsampling_MPEG2;
-	g_VideoDesc.SampleFormat.NominalRange = DXVA2_NominalRange_16_235;
-	g_VideoDesc.SampleFormat.VideoTransferMatrix = EX_COLOR_INFO[g_ExColorInfo][0];
-	g_VideoDesc.SampleFormat.VideoLighting = DXVA2_VideoLighting_dim;
-	g_VideoDesc.SampleFormat.VideoPrimaries = DXVA2_VideoPrimaries_BT709;
-	g_VideoDesc.SampleFormat.VideoTransferFunction = DXVA2_VideoTransFunc_709;
-	g_VideoDesc.SampleFormat.SampleFormat = DXVA2_SampleProgressiveFrame;
-	g_VideoDesc.Format = (D3DFORMAT)VIDEO_MAIN_FORMAT;
-	g_VideoDesc.InputSampleFreq.Numerator = VIDEO_FPS;
-	g_VideoDesc.InputSampleFreq.Denominator = 1;
-	g_VideoDesc.OutputFrameFreq.Numerator = VIDEO_FPS;
-	g_VideoDesc.OutputFrameFreq.Denominator = 1;
-
-	//
-	// Query the video processor GUID.
-	//
-	UINT count;
-	GUID* guids = NULL;
-
-	hr = g_pDXVAVPS->GetVideoProcessorDeviceGuids(&g_VideoDesc, &count, &guids);
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("GetVideoProcessorDeviceGuids failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	//
-	// Create a DXVA2 device.
-	//
-	for (UINT i = 0; i < count; i++)
-	{
-		if (CreateDXVA2VPDevice(guids[i]))
-		{
-			break;
-		}
-	}
-
-	CoTaskMemFree(guids);
-
-	if (!g_pDXVAVPD)
-	{
-		DBGMSG((TEXT("Failed to create a DXVA2 device.\n")));
-		return FALSE;
-	}
-
-	if (!InitializeVideoNV12())
-	{
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-BOOL CTDXVA2Display::CreateDXVA2VPDevice(REFGUID guid)
-{
-	HRESULT hr;
-
-	//
-	// Query the supported render target format.
-	//
-	UINT i, count;
-	D3DFORMAT* formats = NULL;
-
-	hr = g_pDXVAVPS->GetVideoProcessorRenderTargets(guid,
-		&g_VideoDesc,
-		&count,
-		&formats);
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("GetVideoProcessorRenderTargets failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	for (i = 0; i < count; i++)
-	{
-		if (formats[i] == VIDEO_RENDER_TARGET_FORMAT)
-		{
-			break;
-		}
-	}
-
-	CoTaskMemFree(formats);
-
-	if (i >= count)
-	{
-		DBGMSG((TEXT("GetVideoProcessorRenderTargets doesn't support that format.\n")));
-		return FALSE;
-	}
-
-	//
-	// Query video processor capabilities.
-	//
-	hr = g_pDXVAVPS->GetVideoProcessorCaps(guid,
-		&g_VideoDesc,
-		VIDEO_RENDER_TARGET_FORMAT,
-		&g_VPCaps);
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("GetVideoProcessorCaps failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	//
-	// Check to see if the device is hardware device.
-	//
-	if (!(g_VPCaps.DeviceCaps & DXVA2_VPDev_HardwareDevice))
-	{
-		DBGMSG((TEXT("The DXVA2 device isn't a hardware device.\n")));
-		return FALSE;
-	}
-
-	//
-	// This is a progressive device and we cannot provide any reference sample.
-	//
-	if (g_VPCaps.NumForwardRefSamples > 0 || g_VPCaps.NumBackwardRefSamples > 0)
-	{
-		DBGMSG((TEXT("NumForwardRefSamples or NumBackwardRefSamples is greater than 0.\n")));
-		return FALSE;
-	}
-
-	//
-	// Check to see if the device supports all the VP operations we want.
-	//
-	if ((g_VPCaps.VideoProcessorOperations & VIDEO_REQUIED_OP) != VIDEO_REQUIED_OP)
-	{
-		DBGMSG((TEXT("The DXVA2 device doesn't support the VP operations.\n")));
-		return FALSE;
-	}
-
-	//
-	// Create a main stream surface.
-	//
-	hr = g_pDXVAVPS->CreateSurface(VIDEO_MAIN_WIDTH,
-		VIDEO_MAIN_HEIGHT,
-		0,
-		(D3DFORMAT)VIDEO_MAIN_FORMAT,
-		g_VPCaps.InputPool,
-		0,
-		DXVA2_VideoSoftwareRenderTarget,
-		&g_pMainStream,
-		NULL);
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("CreateSurface(MainStream) failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	//
-	// Query ProcAmp ranges.
-	//
-	DXVA2_ValueRange range;
-	for (i = 0; i < ARRAYSIZE(g_ProcAmpRanges); i++)
-	{
-		if (g_VPCaps.ProcAmpControlCaps & (1 << i))
-		{
-			hr = g_pDXVAVPS->GetProcAmpRange(guid,
-				&g_VideoDesc,
-				VIDEO_RENDER_TARGET_FORMAT,
-				1 << i,
-				&range);
-
-			if (FAILED(hr))
-			{
-				DBGMSG((TEXT("GetProcAmpRange failed with error 0x%x.\n"), hr));
-				return FALSE;
-			}
-
-			//
-			// Reset to default value if the range is changed.
-			//
-			if (memcmp(&range, &(g_ProcAmpRanges[i]), sizeof(DXVA2_ValueRange)))
-			// if (range != (g_ProcAmpRanges[i]))
-			{
-				g_ProcAmpRanges[i] = range;
-				g_ProcAmpValues[i] = range.DefaultValue;
-				g_ProcAmpSteps[i] = ComputeLongSteps(range);
-			}
-		}
-	}
-
-	//
-	// Finally create a video processor device.
-	//
-	hr = g_pDXVAVPS->CreateVideoProcessor(guid,
-		&g_VideoDesc,
-		VIDEO_RENDER_TARGET_FORMAT,
-		SUB_STREAM_COUNT,
-		&g_pDXVAVPD);
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("CreateVideoProcessor failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	g_GuidVP = guid;
-
-	return TRUE;
-}
-
-static VOID FillRectangle(
-	D3DLOCKED_RECT& lr,
-	const UINT sx,
-	const UINT sy,
-	const UINT ex,
-	const UINT ey,
-	const DWORD color)
+static VOID FillRectangle(D3DLOCKED_RECT& lr, const UINT sx, const UINT sy, const UINT ex, const UINT ey, const DWORD color)
 {
 	BYTE* p = (BYTE*)lr.pBits;
 
@@ -580,128 +102,9 @@ static VOID FillRectangle(
 	}
 }
 
-BOOL CTDXVA2Display::InitializeVideo()
-{
-	HRESULT hr;
-
-	//
-	// Draw the main stream (SMPTE color bars).
-	//
-	D3DLOCKED_RECT lr;
-
-	hr = g_pMainStream->LockRect(&lr, NULL, D3DLOCK_NOSYSLOCK);
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("LockRect failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	// YUY2 is two pixels per DWORD.
-	const UINT dx = VIDEO_MAIN_WIDTH / 2;
-
-	// First row stripes.
-	const UINT y1 = VIDEO_MAIN_HEIGHT * 2 / 3;
-
-	FillRectangle(lr, dx * 0 / 7, 0, dx * 1 / 7, y1, RGBtoYUY2(RGB_WHITE_75pc));
-	FillRectangle(lr, dx * 1 / 7, 0, dx * 2 / 7, y1, RGBtoYUY2(RGB_YELLOW_75pc));
-	FillRectangle(lr, dx * 2 / 7, 0, dx * 3 / 7, y1, RGBtoYUY2(RGB_CYAN_75pc));
-	FillRectangle(lr, dx * 3 / 7, 0, dx * 4 / 7, y1, RGBtoYUY2(RGB_GREEN_75pc));
-	FillRectangle(lr, dx * 4 / 7, 0, dx * 5 / 7, y1, RGBtoYUY2(RGB_MAGENTA_75pc));
-	FillRectangle(lr, dx * 5 / 7, 0, dx * 6 / 7, y1, RGBtoYUY2(RGB_RED_75pc));
-	FillRectangle(lr, dx * 6 / 7, 0, dx * 7 / 7, y1, RGBtoYUY2(RGB_BLUE_75pc));
-
-	// Second row stripes.
-	const UINT y2 = VIDEO_MAIN_HEIGHT * 3 / 4;
-
-	FillRectangle(lr, dx * 0 / 7, y1, dx * 1 / 7, y2, RGBtoYUY2(RGB_BLUE_75pc));
-	FillRectangle(lr, dx * 1 / 7, y1, dx * 2 / 7, y2, RGBtoYUY2(RGB_BLACK));
-	FillRectangle(lr, dx * 2 / 7, y1, dx * 3 / 7, y2, RGBtoYUY2(RGB_MAGENTA_75pc));
-	FillRectangle(lr, dx * 3 / 7, y1, dx * 4 / 7, y2, RGBtoYUY2(RGB_BLACK));
-	FillRectangle(lr, dx * 4 / 7, y1, dx * 5 / 7, y2, RGBtoYUY2(RGB_CYAN_75pc));
-	FillRectangle(lr, dx * 5 / 7, y1, dx * 6 / 7, y2, RGBtoYUY2(RGB_BLACK));
-	FillRectangle(lr, dx * 6 / 7, y1, dx * 7 / 7, y2, RGBtoYUY2(RGB_WHITE_75pc));
-
-	// Third row stripes.
-	const UINT y3 = VIDEO_MAIN_HEIGHT;
-
-	FillRectangle(lr, dx * 0 / 28, y2, dx * 5 / 28, y3, RGBtoYUY2(RGB_I));
-	FillRectangle(lr, dx * 5 / 28, y2, dx * 10 / 28, y3, RGBtoYUY2(RGB_WHITE));
-	FillRectangle(lr, dx * 10 / 28, y2, dx * 15 / 28, y3, RGBtoYUY2(RGB_Q));
-	FillRectangle(lr, dx * 15 / 28, y2, dx * 20 / 28, y3, RGBtoYUY2(RGB_BLACK));
-	FillRectangle(lr, dx * 20 / 28, y2, dx * 16 / 21, y3, RGBtoYUY2(RGB_BLACK_n4pc));
-	FillRectangle(lr, dx * 16 / 21, y2, dx * 17 / 21, y3, RGBtoYUY2(RGB_BLACK));
-	FillRectangle(lr, dx * 17 / 21, y2, dx * 6 / 7, y3, RGBtoYUY2(RGB_BLACK_p4pc));
-	FillRectangle(lr, dx * 6 / 7, y2, dx * 7 / 7, y3, RGBtoYUY2(RGB_BLACK));
-
-	hr = g_pMainStream->UnlockRect();
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("UnlockRect failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-BOOL CTDXVA2Display::InitializeVideoNV12()
-{
-	HRESULT hr;
-
-	//
-	// Draw the main stream (SMPTE color bars).
-	//
-	D3DLOCKED_RECT lr;
-
-	hr = g_pMainStream->LockRect(&lr, NULL, D3DLOCK_NOSYSLOCK);
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("LockRect failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-
-	BYTE* p = (BYTE*)lr.pBits;
-
-	BYTE Y, U, V;
-	RGBtoYUY(RGB_YELLOW_75pc, &Y, &U, &V);
-
-	// Y
-	for (UINT i = 0; i < VIDEO_MAIN_HEIGHT; i++)
-	{
-		memset(p + (i * lr.Pitch), Y, VIDEO_MAIN_WIDTH);
-	}
-
-	UINT uvHeight = VIDEO_MAIN_HEIGHT / 2;
-	UINT uvWidth = VIDEO_MAIN_WIDTH / 2;
-	for (UINT i = VIDEO_MAIN_HEIGHT; i < uvHeight; i++)
-	{
-		BYTE *uv = p + (i * lr.Pitch);
-		for (UINT j = 0; j < uvWidth; j++)
-		{
-			uv[0] = U;
-			uv[1] = V;
-			uv += 2;
-		}
-	}
-
-
-	hr = g_pMainStream->UnlockRect();
-
-	if (FAILED(hr))
-	{
-		DBGMSG((TEXT("UnlockRect failed with error 0x%x.\n"), hr));
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
 static DXVA2_AYUVSample16 GetBackgroundColor()
 {
-	const D3DCOLOR yuv = RGBtoYUV(BACKGROUND_COLORS[g_BackgroundColor]);
+	const D3DCOLOR yuv = RGBtoYUV(BACKGROUND_COLOR);
 
 	const BYTE Y = LOBYTE(HIWORD(yuv));
 	const BYTE U = HIBYTE(LOWORD(yuv));
@@ -727,9 +130,7 @@ static RECT ScaleRectangle(const RECT& input, const RECT& src, const RECT& dst)
 	UINT dst_dx = dst.right - dst.left;
 	UINT dst_dy = dst.bottom - dst.top;
 
-	//
 	// Scale input rectangle within src rectangle to dst rectangle.
-	//
 	rect.left = input.left   * dst_dx / src_dx;
 	rect.right = input.right  * dst_dx / src_dx;
 	rect.top = input.top    * dst_dy / src_dy;
@@ -738,24 +139,441 @@ static RECT ScaleRectangle(const RECT& input, const RECT& src, const RECT& dst)
 	return rect;
 }
 
-BOOL CTDXVA2Display::ProcessVideo()
-{
-	HRESULT hr;
 
-	if (!g_pD3DD9)
+CTDXVA2Display::CTDXVA2Display()
+{
+	m_wnd = NULL;
+	m_windowed = 1;
+	m_in_mode_change = FALSE;
+	m_rect_window = { 0 };
+	g_target_width_percent = 100;
+	m_target_height_percent = 100;
+	g_dwm_queuing = FALSE;
+
+	m_video_format = VIDEO_MAIN_FORMAT;
+	m_frame_width = VIDEO_MAIN_WIDTH;
+	m_frame_height = VIDEO_MAIN_HEIGHT;
+
+	m_d3d9 = NULL;
+	m_d3dd9 = NULL;
+	m_d3drt = NULL;
+	memset(&m_d3dpp, 0, sizeof(m_d3dpp));
+
+	m_device_manager = NULL;
+	m_dxvaps = NULL;
+	m_dxvapd = NULL;
+
+	m_main_stream = NULL;
+
+	m_vp_guid = { 0 };
+	m_video_desc = { 0 };
+	m_vp_caps = { 0 };
+
+	m_ex_color_info = 0;
+	memset(m_proc_amp_ranges, 0, sizeof(m_proc_amp_ranges));
+	memset(m_proc_amp_values, 0, sizeof(m_proc_amp_values));
+	memset(m_proc_amp_steps, 0, sizeof(m_proc_amp_steps));
+}
+
+CTDXVA2Display::~CTDXVA2Display()
+{
+	DestroyDXVA2();
+	DestroyD3D9();
+}
+
+int CTDXVA2Display::Init(HWND hwnd)
+{
+	m_wnd = hwnd;
+	if (!InitializeModule())
+		return CTDXVADISP_EC_FAILURE;
+	if (!InitializeD3D9())
+		return CTDXVADISP_EC_FAILURE;
+	if (!InitializeDXVA2())
+		return CTDXVADISP_EC_FAILURE;
+
+	return CTDXVADISP_EC_OK;
+}
+
+void CTDXVA2Display::SetVideoFormat(DWORD format)
+{
+	m_video_format = format;
+}
+
+void CTDXVA2Display::SetFrameResolution(int width, int height)
+{
+	if (m_frame_width == width && m_frame_height == height)
+		return;
+
+	m_frame_width = width;
+	m_frame_height = height;
+#if 0
+	if (m_main_stream)
 	{
+		m_main_stream->Release();
+		m_main_stream = NULL;
+	}
+
+	HRESULT hr;
+	// Create a main stream surface.
+	hr = m_dxvaps->CreateSurface(m_frame_width,
+		m_frame_height,
+		0,
+		(D3DFORMAT)m_video_format,
+		m_vp_caps.InputPool,
+		0,
+		DXVA2_VideoSoftwareRenderTarget,
+		&m_main_stream,
+		NULL);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("CreateSurface(MainStream) failed with error 0x%x.\n"), hr));
+		return;
+	}
+
+	FillNV12SurfaceWithColor(m_main_stream, m_frame_width, m_frame_height, RGB_GREEN_75pc);
+#endif // DXVA2DISPDEBUG
+}
+
+IDirect3DDeviceManager9 *CTDXVA2Display::DeviceManager()
+{
+	return m_device_manager;
+}
+
+void CTDXVA2Display::OnWindowSizeChanged()
+{
+
+}
+
+
+
+int CTDXVA2Display::Display(IDirect3DSurface9 *surface)
+{
+	m_main_stream = surface;
+
+	ProcessVideo();
+	return CTDXVADISP_EC_OK;
+}
+
+BOOL CTDXVA2Display::InitializeModule()
+{
+	// Load these DLLs dynamically because these may not be available prior to Vista.
+	m_rgb9rast_dll = LoadLibrary(TEXT("rgb9rast.dll"));
+	if (!m_rgb9rast_dll) {
+		CTDXVA2DISPError("LoadLibrary(rgb9rast.dll) failed with error %d.\n", GetLastError());
+	}
+
+	m_dwmapi_dll = LoadLibrary(TEXT("dwmapi.dll"));
+	if (!m_dwmapi_dll) {
+		CTDXVA2DISPError("LoadLibrary(dwmapi.dll) failed with error %d.\n", GetLastError());
+		goto SKIP_DWMAPI;
+	}
+
+	m_fn_dwm_is_composition_enabled = GetProcAddress(m_dwmapi_dll, "DwmIsCompositionEnabled");
+	if (!m_fn_dwm_is_composition_enabled) {
+		CTDXVA2DISPError("GetProcAddress(DwmIsCompositionEnabled) failed with error %d.\n", GetLastError());
 		return FALSE;
 	}
 
-	RECT rect;
-	GetClientRect(g_Hwnd, &rect);
-	if (IsRectEmpty(&rect))
-	{
-		return TRUE;
+	m_fn_dwm_get_composition_timing_info = GetProcAddress(m_dwmapi_dll, "DwmGetCompositionTimingInfo");
+	if (!m_fn_dwm_get_composition_timing_info) {
+		CTDXVA2DISPError("GetProcAddress(DwmGetCompositionTimingInfo) failed with error %d.\n", GetLastError());
+		return FALSE;
 	}
 
+	m_fn_dwm_set_present_parameters = GetProcAddress(m_dwmapi_dll, "DwmSetPresentParameters");
+	if (!m_fn_dwm_set_present_parameters) {
+		CTDXVA2DISPError("GetProcAddress(DwmSetPresentParameters) failed with error %d.\n", GetLastError());
+		return FALSE;
+	}
+
+SKIP_DWMAPI:
+
+	return TRUE;
+}
+
+BOOL CTDXVA2Display::InitializeD3D9()
+{
+	HRESULT hr;
+
+	m_d3d9 = Direct3DCreate9(D3D_SDK_VERSION);
+	if (!m_d3d9)
+	{
+		DBGMSG((TEXT("Direct3DCreate9 failed.\n")));
+		return FALSE;
+	}
+
+	if (m_windowed)
+	{
+		m_d3dpp.BackBufferWidth = 0;
+		m_d3dpp.BackBufferHeight = 0;
+	}
+	else
+	{
+		m_d3dpp.BackBufferWidth = GetSystemMetrics(SM_CXSCREEN);
+		m_d3dpp.BackBufferHeight = GetSystemMetrics(SM_CYSCREEN);
+	}
+
+	m_d3dpp.BackBufferFormat = VIDEO_RENDER_TARGET_FORMAT;
+	m_d3dpp.BackBufferCount = BACK_BUFFER_COUNT;
+	m_d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	m_d3dpp.hDeviceWindow = m_wnd;
+	m_d3dpp.Windowed = m_windowed;
+	m_d3dpp.Flags = D3DPRESENTFLAG_VIDEO;
+	m_d3dpp.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
+	m_d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
+
+
+	// First try to create a hardware D3D9 device.
+	hr = m_d3d9->CreateDevice(D3DADAPTER_DEFAULT,
+		D3DDEVTYPE_HAL,
+		m_wnd,
+		D3DCREATE_FPU_PRESERVE |
+		D3DCREATE_MULTITHREADED |
+		D3DCREATE_SOFTWARE_VERTEXPROCESSING,
+		&m_d3dpp,
+		&m_d3dd9);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("CreateDevice(HAL) failed with error 0x%x.\n"), hr));
+	}
+
+
+	hr = DXVA2CreateDirect3DDeviceManager9(&m_reset_token, &m_device_manager);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("DXVA2CreateDirect3DDeviceManager9 failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	hr = m_device_manager->ResetDevice(m_d3dd9, m_reset_token);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("DeviceManager:ResetDevice failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	return TRUE;	
+}
+
+BOOL CTDXVA2Display::InitializeDXVA2()
+{
+	HRESULT hr;
+
+	// Retrieve a back buffer as the video render target.
+	hr = m_d3dd9->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &m_d3drt);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("GetBackBuffer failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	// Create DXVA2 Video Processor Service.
+	hr = DXVA2CreateVideoService(m_d3dd9,
+		IID_IDirectXVideoProcessorService,
+		(VOID**)&m_dxvaps);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("DXVA2CreateVideoService failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	// Initialize the video descriptor.
+	m_video_desc.SampleWidth = m_frame_width;
+	m_video_desc.SampleHeight = m_frame_height;
+	m_video_desc.SampleFormat.VideoChromaSubsampling = DXVA2_VideoChromaSubsampling_MPEG2;
+	m_video_desc.SampleFormat.NominalRange = DXVA2_NominalRange_16_235;
+	m_video_desc.SampleFormat.VideoTransferMatrix = EX_COLOR_INFO[m_ex_color_info][0];
+	m_video_desc.SampleFormat.VideoLighting = DXVA2_VideoLighting_dim;
+	m_video_desc.SampleFormat.VideoPrimaries = DXVA2_VideoPrimaries_BT709;
+	m_video_desc.SampleFormat.VideoTransferFunction = DXVA2_VideoTransFunc_709;
+	m_video_desc.SampleFormat.SampleFormat = DXVA2_SampleProgressiveFrame;
+	m_video_desc.Format = (D3DFORMAT)m_video_format;
+	m_video_desc.InputSampleFreq.Numerator = VIDEO_FPS;
+	m_video_desc.InputSampleFreq.Denominator = 1;
+	m_video_desc.OutputFrameFreq.Numerator = VIDEO_FPS;
+	m_video_desc.OutputFrameFreq.Denominator = 1;
+
+	// Query the video processor GUID.
+	UINT count;
+	GUID* guids = NULL;
+	hr = m_dxvaps->GetVideoProcessorDeviceGuids(&m_video_desc, &count, &guids);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("GetVideoProcessorDeviceGuids failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	// Create a DXVA2 device.
+	for (UINT i = 0; i < count; i++)
+	{
+		if (CreateDXVA2VPDevice(guids[i]))
+		{
+			break;
+		}
+	}
+	CoTaskMemFree(guids);
+
+	if (!m_dxvapd)
+	{
+		DBGMSG((TEXT("Failed to create a DXVA2 device.\n")));
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+BOOL CTDXVA2Display::CreateDXVA2VPDevice(REFGUID guid)
+{
+	HRESULT hr;
+
+	// Query the supported render target format.
+	UINT i, count;
+	D3DFORMAT* formats = NULL;
+
+	hr = m_dxvaps->GetVideoProcessorRenderTargets(guid,
+		&m_video_desc,
+		&count,
+		&formats);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("GetVideoProcessorRenderTargets failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	for (i = 0; i < count; i++)
+	{
+		if (formats[i] == VIDEO_RENDER_TARGET_FORMAT)
+		{
+			break;
+		}
+	}
+
+	CoTaskMemFree(formats);
+
+	if (i >= count)
+	{
+		DBGMSG((TEXT("GetVideoProcessorRenderTargets doesn't support that format.\n")));
+		return FALSE;
+	}
+
+	// Query video processor capabilities.
+	hr = m_dxvaps->GetVideoProcessorCaps(guid,
+		&m_video_desc,
+		VIDEO_RENDER_TARGET_FORMAT,
+		&m_vp_caps);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("GetVideoProcessorCaps failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	// Check to see if the device is hardware device.
+	if (!(m_vp_caps.DeviceCaps & DXVA2_VPDev_HardwareDevice))
+	{
+		DBGMSG((TEXT("The DXVA2 device isn't a hardware device.\n")));
+		return FALSE;
+	}
+
+	// This is a progressive device and we cannot provide any reference sample.
+	if (m_vp_caps.NumForwardRefSamples > 0 || m_vp_caps.NumBackwardRefSamples > 0)
+	{
+		DBGMSG((TEXT("NumForwardRefSamples or NumBackwardRefSamples is greater than 0.\n")));
+		return FALSE;
+	}
+
+	// Check to see if the device supports all the VP operations we want.
+	if ((m_vp_caps.VideoProcessorOperations & VIDEO_REQUIED_OP) != VIDEO_REQUIED_OP)
+	{
+		DBGMSG((TEXT("The DXVA2 device doesn't support the VP operations.\n")));
+		return FALSE;
+	}
+
+#if 0
+	// Create a main stream surface.
+	hr = m_dxvaps->CreateSurface(m_frame_width,
+		m_frame_height,
+		0,
+		(D3DFORMAT)m_video_format,
+		m_vp_caps.InputPool,
+		0,
+		DXVA2_VideoSoftwareRenderTarget,
+		&m_main_stream,
+		NULL);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("CreateSurface(MainStream) failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+	FillNV12SurfaceWithColor(m_main_stream, m_frame_width, m_frame_height, RGB_GREEN_75pc);
+#endif
+
+	// Query ProcAmp ranges.
+	DXVA2_ValueRange range;
+	for (i = 0; i < ARRAYSIZE(m_proc_amp_ranges); i++)
+	{
+		if (m_vp_caps.ProcAmpControlCaps & (1 << i))
+		{
+			hr = m_dxvaps->GetProcAmpRange(guid,
+				&m_video_desc,
+				VIDEO_RENDER_TARGET_FORMAT,
+				1 << i,
+				&range);
+
+			if (FAILED(hr))
+			{
+				DBGMSG((TEXT("GetProcAmpRange failed with error 0x%x.\n"), hr));
+				return FALSE;
+			}
+
+			// Reset to default value if the range is changed.
+			if (memcmp(&range, &(m_proc_amp_ranges[i]), sizeof(DXVA2_ValueRange))) // if (range != (g_ProcAmpRanges[i]))
+			{
+				m_proc_amp_ranges[i] = range;
+				m_proc_amp_values[i] = range.DefaultValue;
+				m_proc_amp_steps[i] = ComputeLongSteps(range);
+			}
+		}
+	}
+
+	// Finally create a video processor device.
+	hr = m_dxvaps->CreateVideoProcessor(guid,
+		&m_video_desc,
+		VIDEO_RENDER_TARGET_FORMAT,
+		0, //SUB_STREAM_COUNT,
+		&m_dxvapd);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("CreateVideoProcessor failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	m_vp_guid = guid;
+
+	return TRUE;
+}
+
+BOOL CTDXVA2Display::ProcessVideo()
+{
+	HRESULT hr;
+	HANDLE device_hanlde;
+
+	if (!LockDevice(&device_hanlde, &m_d3dd9))
+		return FALSE;
+
+	RECT rect;
+	GetClientRect(m_wnd, &rect);
+	if (IsRectEmpty(&rect))
+		return TRUE;
+
+	m_d3drt = NULL;
+	hr = m_d3dd9->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &m_d3drt);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("GetBackBuffer failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
 	// Check the current status of D3D9 device.
-	hr = g_pD3DD9->TestCooperativeLevel();
+	hr = m_d3dd9->TestCooperativeLevel();
 	switch (hr)
 	{
 	case D3D_OK:
@@ -765,32 +583,31 @@ BOOL CTDXVA2Display::ProcessVideo()
 		return TRUE;
 	case D3DERR_DEVICENOTRESET:
 		DBGMSG((TEXT("TestCooperativeLevel returned D3DERR_DEVICENOTRESET.\n")));
+#if 0
 		if (!ResetDevice())
 		{
 			return FALSE;
 		}
+#endif
 		break;
 	default:
 		DBGMSG((TEXT("TestCooperativeLevel failed with error 0x%x.\n"), hr));
 		return FALSE;
 	}
 
-	DXVA2_VideoProcessBltParams blt = { 0 };
-	DXVA2_VideoSample samples[2] = { 0 };
-
-
 	RECT client;
-	GetClientRect(g_Hwnd, &client);
+	GetClientRect(m_wnd, &client);
 
 	RECT target;
-	target.left = client.left + (client.right - client.left) / 2 * (100 - g_TargetWidthPercent) / 100;
-	target.right = client.right - (client.right - client.left) / 2 * (100 - g_TargetWidthPercent) / 100;
-	target.top = client.top + (client.bottom - client.top) / 2 * (100 - g_TargetHeightPercent) / 100;
-	target.bottom = client.bottom - (client.bottom - client.top) / 2 * (100 - g_TargetHeightPercent) / 100;
+	target.left = client.left + (client.right - client.left) / 2 * (100 - g_target_width_percent) / 100;
+	target.right = client.right - (client.right - client.left) / 2 * (100 - g_target_width_percent) / 100;
+	target.top = client.top + (client.bottom - client.top) / 2 * (100 - m_target_height_percent) / 100;
+	target.bottom = client.bottom - (client.bottom - client.top) / 2 * (100 - m_target_height_percent) / 100;
 
-	//
+	DXVA2_VideoProcessBltParams blt = { 0 };
+	DXVA2_VideoSample samples[1] = { 0 };
+
 	// Initialize VPBlt parameters.
-	//
 	blt.TargetFrame = 0;
 	blt.TargetRect = target;
 
@@ -802,85 +619,119 @@ BOOL CTDXVA2Display::ProcessVideo()
 
 	// DXVA2_VideoProcess_YUV2RGBExtended
 	blt.DestFormat.VideoChromaSubsampling = DXVA2_VideoChromaSubsampling_Unknown;
-	blt.DestFormat.NominalRange = EX_COLOR_INFO[g_ExColorInfo][1];
+	blt.DestFormat.NominalRange = EX_COLOR_INFO[m_ex_color_info][1];
 	blt.DestFormat.VideoTransferMatrix = DXVA2_VideoTransferMatrix_Unknown;
 	blt.DestFormat.VideoLighting = DXVA2_VideoLighting_dim;
 	blt.DestFormat.VideoPrimaries = DXVA2_VideoPrimaries_BT709;
 	blt.DestFormat.VideoTransferFunction = DXVA2_VideoTransFunc_709;
-
 	blt.DestFormat.SampleFormat = DXVA2_SampleProgressiveFrame;
 
 	// DXVA2_ProcAmp_Brightness
-	blt.ProcAmpValues.Brightness = g_ProcAmpValues[0];
-
+	blt.ProcAmpValues.Brightness = m_proc_amp_values[0];
 	// DXVA2_ProcAmp_Contrast
-	blt.ProcAmpValues.Contrast = g_ProcAmpValues[1];
-
+	blt.ProcAmpValues.Contrast = m_proc_amp_values[1];
 	// DXVA2_ProcAmp_Hue
-	blt.ProcAmpValues.Hue = g_ProcAmpValues[2];
-
+	blt.ProcAmpValues.Hue = m_proc_amp_values[2];
 	// DXVA2_ProcAmp_Saturation
-	blt.ProcAmpValues.Saturation = g_ProcAmpValues[3];
-
+	blt.ProcAmpValues.Saturation = m_proc_amp_values[3];
 	// DXVA2_VideoProcess_AlphaBlend
 	blt.Alpha = DXVA2_Fixed32OpaqueAlpha();
 
-	//
 	// Initialize main stream video sample.
-	//
-	samples[0].Start = 0;
-	samples[0].End = 100000000;
+//  	samples[0].Start = 0;
+//  	samples[0].End = 10000;
 
 	// DXVA2_VideoProcess_YUV2RGBExtended
 	samples[0].SampleFormat.VideoChromaSubsampling = DXVA2_VideoChromaSubsampling_MPEG2;
 	samples[0].SampleFormat.NominalRange = DXVA2_NominalRange_16_235;
-	samples[0].SampleFormat.VideoTransferMatrix = EX_COLOR_INFO[g_ExColorInfo][0];
+	samples[0].SampleFormat.VideoTransferMatrix = EX_COLOR_INFO[m_ex_color_info][0];
 	samples[0].SampleFormat.VideoLighting = DXVA2_VideoLighting_dim;
 	samples[0].SampleFormat.VideoPrimaries = DXVA2_VideoPrimaries_BT709;
 	samples[0].SampleFormat.VideoTransferFunction = DXVA2_VideoTransFunc_709;
 	samples[0].SampleFormat.SampleFormat = DXVA2_SampleProgressiveFrame;
 
-	samples[0].SrcSurface = g_pMainStream;
+	samples[0].SrcSurface = m_main_stream;
 
+	RECT src_rect = { 0, 0, (LONG)m_frame_width, (LONG)m_frame_height};
 	// DXVA2_VideoProcess_SubRects
-	samples[0].SrcRect = g_SrcRect;
-
+	samples[0].SrcRect = src_rect;
 	// DXVA2_VideoProcess_StretchX, Y
-	samples[0].DstRect = ScaleRectangle(g_DstRect, VIDEO_MAIN_RECT, client);
+	samples[0].DstRect = ScaleRectangle(src_rect, src_rect, client);
+	// samples[0].DstRect = src_rect;
 
 	// DXVA2_VideoProcess_PlanarAlpha
-	samples[0].PlanarAlpha = DXVA2FloatToFixed(float(g_PlanarAlphaValue) / 0xFF);
+	samples[0].PlanarAlpha = DXVA2FloatToFixed(float(DEFAULT_PLANAR_ALPHA_VALUE) / 0xFF);
 
-	if (g_TargetWidthPercent < 100 || g_TargetHeightPercent < 100)
+	if (g_target_width_percent < 100 || m_target_height_percent < 100)
 	{
-		hr = g_pD3DD9->ColorFill(g_pD3DRT, NULL, D3DCOLOR_XRGB(0, 0, 0));
+		hr = m_d3dd9->ColorFill(m_d3drt, NULL, D3DCOLOR_XRGB(0, 0, 0));
 
 		if (FAILED(hr))
 		{
 			DBGMSG((TEXT("ColorFill failed with error 0x%x.\n"), hr));
 		}
 	}
-
-	hr = g_pDXVAVPD->VideoProcessBlt(g_pD3DRT,
-		&blt,
-		samples,
-		1,
-		NULL);
+	// E_INVALIDARG;
+	// D3DERR_INVALIDCALL;
+	hr = m_dxvapd->VideoProcessBlt(m_d3drt, &blt, samples, 1, NULL);
 	if (FAILED(hr))
 	{
 		DBGMSG((TEXT("VideoProcessBlt failed with error 0x%x.\n"), hr));
 	}
-
-	//
+	
 	// Re-enable DWM queuing if it is not enabled.
-	//
 	EnableDwmQueuing();
 
-	hr = g_pD3DD9->Present(NULL, NULL, NULL, NULL);
-
+	hr = m_d3dd9->Present(NULL, NULL, NULL, NULL);
 	if (FAILED(hr))
 	{
 		DBGMSG((TEXT("Present failed with error 0x%x.\n"), hr));
+	}
+
+	UnlockDevice(device_hanlde);
+
+	return TRUE;
+}
+
+BOOL CTDXVA2Display::LockDevice(HANDLE *handle, IDirect3DDevice9 **d3dd9)
+{
+	HRESULT hr;
+
+	hr = m_device_manager->OpenDeviceHandle(handle);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("OpenDeviceHandle failed with error 0x%x.\n"), hr));
+		return FALSE;
+	}
+
+	hr = m_device_manager->LockDevice(*handle, d3dd9, TRUE);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("LockDevice failed with error 0x%x.\n"), hr));
+		m_device_manager->CloseDeviceHandle(*handle);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+BOOL CTDXVA2Display::UnlockDevice(HANDLE handle)
+{
+	HRESULT hr;
+	BOOL ret = TRUE;
+
+	hr = m_device_manager->UnlockDevice(handle, FALSE);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("OpenDeviceHandle failed with error 0x%x.\n"), hr));
+		ret = FALSE;
+	}
+
+	hr = m_device_manager->CloseDeviceHandle(handle);
+	if (FAILED(hr))
+	{
+		DBGMSG((TEXT("CloseDeviceHandle failed with error 0x%x.\n"), hr));
+		ret = FALSE;
 	}
 
 	return TRUE;
@@ -892,41 +743,35 @@ BOOL CTDXVA2Display::ResetDevice(BOOL bChangeWindowMode)
 
 	if (bChangeWindowMode)
 	{
-		g_bWindowed = !g_bWindowed;
+		m_windowed = !m_windowed;
 
-		if (!ChangeFullscreenMode(!g_bWindowed))
+		if (!ChangeFullscreenMode(!m_windowed))
 		{
 			return FALSE;
 		}
 	}
 
-	if (g_pD3DD9)
+	if (m_d3dd9)
 	{
-		//
 		// Destroy DXVA2 device because it may be holding any D3D9 resources.
-		//
 		DestroyDXVA2();
 
-		if (g_bWindowed)
+		if (m_windowed)
 		{
-			g_D3DPP.BackBufferWidth = 0;
-			g_D3DPP.BackBufferHeight = 0;
+			m_d3dpp.BackBufferWidth = 0;
+			m_d3dpp.BackBufferHeight = 0;
 		}
 		else
 		{
-			g_D3DPP.BackBufferWidth = GetSystemMetrics(SM_CXSCREEN);
-			g_D3DPP.BackBufferHeight = GetSystemMetrics(SM_CYSCREEN);
+			m_d3dpp.BackBufferWidth = GetSystemMetrics(SM_CXSCREEN);
+			m_d3dpp.BackBufferHeight = GetSystemMetrics(SM_CYSCREEN);
 		}
 
-		g_D3DPP.Windowed = g_bWindowed;
+		m_d3dpp.Windowed = m_windowed;
 
-		//
 		// Reset will change the parameters, so use a copy instead.
-		//
-		D3DPRESENT_PARAMETERS d3dpp = g_D3DPP;
-
-		hr = g_pD3DD9->Reset(&d3dpp);
-
+		D3DPRESENT_PARAMETERS d3dpp = m_d3dpp;
+		hr = m_d3dd9->Reset(&d3dpp);
 		if (FAILED(hr))
 		{
 			DBGMSG((TEXT("Reset failed with error 0x%x.\n"), hr));
@@ -937,10 +782,8 @@ BOOL CTDXVA2Display::ResetDevice(BOOL bChangeWindowMode)
 			return TRUE;
 		}
 
-		//
 		// If either Reset didn't work or failed to initialize DXVA2 device,
 		// try to recover by recreating the devices from the scratch.
-		//
 		DestroyDXVA2();
 		DestroyD3D9();
 	}
@@ -950,10 +793,8 @@ BOOL CTDXVA2Display::ResetDevice(BOOL bChangeWindowMode)
 		return TRUE;
 	}
 
-	//
 	// Fallback to Window mode, if failed to initialize Fullscreen mode.
-	//
-	if (g_bWindowed)
+	if (m_windowed)
 	{
 		return FALSE;
 	}
@@ -966,7 +807,7 @@ BOOL CTDXVA2Display::ResetDevice(BOOL bChangeWindowMode)
 		return FALSE;
 	}
 
-	g_bWindowed = TRUE;
+	m_windowed = TRUE;
 
 	if (InitializeD3D9() && InitializeDXVA2())
 	{
@@ -980,64 +821,48 @@ BOOL CTDXVA2Display::EnableDwmQueuing()
 {
 	HRESULT hr;
 
-	//
 	// DWM is not available.
-	//
-	if (!g_hDwmApiDLL)
+	if (!m_dwmapi_dll)
 	{
 		return TRUE;
 	}
 
-	//
 	// Check to see if DWM is currently enabled.
-	//
 	BOOL bDWM = FALSE;
 
-	hr = ((PFNDWMISCOMPOSITIONENABLED)g_pfnDwmIsCompositionEnabled)(&bDWM);
-
+	hr = ((PFNDWMISCOMPOSITIONENABLED)m_fn_dwm_is_composition_enabled)(&bDWM);
 	if (FAILED(hr))
 	{
 		DBGMSG((TEXT("DwmIsCompositionEnabled failed with error 0x%x.\n"), hr));
 		return FALSE;
 	}
 
-	//
 	// DWM queuing is disabled when DWM is disabled.
-	//
 	if (!bDWM)
 	{
-		g_bDwmQueuing = FALSE;
+		g_dwm_queuing = FALSE;
 		return TRUE;
 	}
 
-	//
 	// DWM queuing is enabled already.
-	//
-	if (g_bDwmQueuing)
+	if (g_dwm_queuing)
 	{
 		return TRUE;
 	}
 
-	//
 	// Retrieve DWM refresh count of the last vsync.
-	//
 	DWM_TIMING_INFO dwmti = { 0 };
-
 	dwmti.cbSize = sizeof(dwmti);
 
-	hr = ((PFNDWMGETCOMPOSITIONTIMINGINFO)g_pfnDwmGetCompositionTimingInfo)(NULL, &dwmti);
-
+	hr = ((PFNDWMGETCOMPOSITIONTIMINGINFO)m_fn_dwm_get_composition_timing_info)(NULL, &dwmti);
 	if (FAILED(hr))
 	{
 		DBGMSG((TEXT("DwmGetCompositionTimingInfo failed with error 0x%x.\n"), hr));
 		return FALSE;
 	}
 
-	//
 	// Enable DWM queuing from the next refresh.
-	//
 	DWM_PRESENT_PARAMETERS dwmpp = { 0 };
-
 	dwmpp.cbSize = sizeof(dwmpp);
 	dwmpp.fQueue = TRUE;
 	dwmpp.cRefreshStart = dwmti.cRefresh + 1;
@@ -1046,48 +871,41 @@ BOOL CTDXVA2Display::EnableDwmQueuing()
 	dwmpp.cRefreshesPerFrame = 1;
 	dwmpp.eSampling = DWM_SOURCE_FRAME_SAMPLING_POINT;
 
-	hr = ((PFNDWMSETPRESENTPARAMETERS)g_pfnDwmSetPresentParameters)(g_Hwnd, &dwmpp);
-
+	hr = ((PFNDWMSETPRESENTPARAMETERS)m_fn_dwm_set_present_parameters)(m_wnd, &dwmpp);
 	if (FAILED(hr))
 	{
 		DBGMSG((TEXT("DwmSetPresentParameters failed with error 0x%x.\n"), hr));
 		return FALSE;
 	}
 
-	//
 	// DWM queuing is enabled.
-	//
-	g_bDwmQueuing = TRUE;
+	g_dwm_queuing = TRUE;
 
 	return TRUE;
 }
 
 BOOL CTDXVA2Display::ChangeFullscreenMode(BOOL bFullscreen)
 {
-	//
 	// Mark the mode change in progress to prevent the device is being reset in OnSize.
 	// This is because these API calls below will generate WM_SIZE messages.
-	//
-	g_bInModeChange = TRUE;
+	m_in_mode_change = TRUE;
 
 	if (bFullscreen)
 	{
-		//
 		// Save the window position.
-		//
-		if (!GetWindowRect(g_Hwnd, &g_RectWindow))
+		if (!GetWindowRect(m_wnd, &m_rect_window))
 		{
 			DBGMSG((TEXT("GetWindowRect failed with error %d.\n"), GetLastError()));
 			return FALSE;
 		}
 
-		if (!SetWindowLongPtr(g_Hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE))
+		if (!SetWindowLongPtr(m_wnd, GWL_STYLE, WS_POPUP | WS_VISIBLE))
 		{
 			DBGMSG((TEXT("SetWindowLongPtr failed with error %d.\n"), GetLastError()));
 			return FALSE;
 		}
 
-		if (!SetWindowPos(g_Hwnd,
+		if (!SetWindowPos(m_wnd,
 			HWND_NOTOPMOST,
 			0,
 			0,
@@ -1101,21 +919,19 @@ BOOL CTDXVA2Display::ChangeFullscreenMode(BOOL bFullscreen)
 	}
 	else
 	{
-		if (!SetWindowLongPtr(g_Hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE))
+		if (!SetWindowLongPtr(m_wnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE))
 		{
 			DBGMSG((TEXT("SetWindowLongPtr failed with error %d.\n"), GetLastError()));
 			return FALSE;
 		}
 
-		//
 		// Restore the window position.
-		//
-		if (!SetWindowPos(g_Hwnd,
+		if (!SetWindowPos(m_wnd,
 			HWND_NOTOPMOST,
-			g_RectWindow.left,
-			g_RectWindow.top,
-			g_RectWindow.right - g_RectWindow.left,
-			g_RectWindow.bottom - g_RectWindow.top,
+			m_rect_window.left,
+			m_rect_window.top,
+			m_rect_window.right - m_rect_window.left,
+			m_rect_window.bottom - m_rect_window.top,
 			SWP_FRAMECHANGED))
 		{
 			DBGMSG((TEXT("SetWindowPos failed with error %d.\n"), GetLastError()));
@@ -1123,49 +939,49 @@ BOOL CTDXVA2Display::ChangeFullscreenMode(BOOL bFullscreen)
 		}
 	}
 
-	g_bInModeChange = FALSE;
+	m_in_mode_change = FALSE;
 
 	return TRUE;
 }
 
 VOID CTDXVA2Display::DestroyDXVA2()
 {
-	if (g_pMainStream)
+	if (m_dxvapd)
 	{
-		g_pMainStream->Release();
-		g_pMainStream = NULL;
+		m_dxvapd->Release();
+		m_dxvapd = NULL;
 	}
 
-	if (g_pDXVAVPD)
+	if (m_dxvaps)
 	{
-		g_pDXVAVPD->Release();
-		g_pDXVAVPD = NULL;
+		m_dxvaps->Release();
+		m_dxvaps = NULL;
 	}
 
-	if (g_pDXVAVPS)
+	if (m_d3drt)
 	{
-		g_pDXVAVPS->Release();
-		g_pDXVAVPS = NULL;
-	}
-
-	if (g_pD3DRT)
-	{
-		g_pD3DRT->Release();
-		g_pD3DRT = NULL;
+		m_d3drt->Release();
+		m_d3drt = NULL;
 	}
 }
 
 VOID CTDXVA2Display::DestroyD3D9()
 {
-	if (g_pD3DD9)
+	if (m_d3dd9)
 	{
-		g_pD3DD9->Release();
-		g_pD3DD9 = NULL;
+		m_d3dd9->Release();
+		m_d3dd9 = NULL;
 	}
 
-	if (g_pD3D9)
+	if (m_d3d9)
 	{
-		g_pD3D9->Release();
-		g_pD3D9 = NULL;
+		m_d3d9->Release();
+		m_d3d9 = NULL;
+	}
+
+	if (m_device_manager)
+	{
+		m_device_manager->Release();
+		m_device_manager = NULL;
 	}
 }
