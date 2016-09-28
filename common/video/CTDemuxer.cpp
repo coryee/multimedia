@@ -1,7 +1,3 @@
-#ifndef VC_EXTRALEAN
-#define VC_EXTRALEAN            // 从 Windows 头中排除极少使用的资料
-#endif
-
 #include "CTDemuxer.h"
 #include "commutil.h"
 #include "threadutil.h"
@@ -79,7 +75,7 @@ int CTDemuxer::Stop()
 
 int CTDemuxer::Execute()
 {
-
+	int ret;
 	if (InitInternal() != 0)
 		return -1;
 	
@@ -87,7 +83,8 @@ int CTDemuxer::Execute()
 	m_keep_running = 1;
 	m_is_running = 1;
 	while (m_keep_running) {
-		while (av_read_frame(m_ifmt_ctx, &pkt) >= 0) {
+		ret = 0;
+		while ((ret = av_read_frame(m_ifmt_ctx, &pkt)) >= 0) {
 			if (pkt.stream_index == m_video_idx) {
 				if (m_h264bsfc) {
 					av_bitstream_filter_filter(m_h264bsfc, m_ifmt_ctx->streams[m_video_idx]->codec,
@@ -110,6 +107,11 @@ int CTDemuxer::Execute()
 	m_is_running = 0;
 
 	return 0;
+}
+
+int CTDemuxer::IsFinished()
+{
+	return m_is_running;
 }
 
 int CTDemuxer::InitInternal()
