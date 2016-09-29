@@ -60,6 +60,7 @@ int CTDemuxer::Start()
 	if (CTCreateThread(&handle, (CTThreadFunc)CTDemuxerExecute, this) != 0)
 		return -1;
 	CTCloseThreadHandle(handle);
+	m_is_running = 1;
 	return 0;
 }
 
@@ -81,7 +82,17 @@ int CTDemuxer::Execute()
 	
 	AVPacket pkt;
 	m_keep_running = 1;
-	m_is_running = 1;
+
+	int num_video_packet = 0;
+	int num_audio_packet = 0;
+	char error[64];
+
+	// test
+#if 1
+	FILE *fp = fopen("output.h264", "wb+");
+#endif
+
+
 	while (m_keep_running) {
 		ret = 0;
 		while ((ret = av_read_frame(m_ifmt_ctx, &pkt)) >= 0) {
@@ -90,7 +101,11 @@ int CTDemuxer::Execute()
 					av_bitstream_filter_filter(m_h264bsfc, m_ifmt_ctx->streams[m_video_idx]->codec,
 						NULL, &pkt.data, &pkt.size, pkt.data, pkt.size, 0);
 				}
-				CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_VIDEO_STREAM], &pkt);
+				fwrite(pkt.data, 1, pkt.size, fp);
+				printf("got a video packet: %d\n", ++num_video_packet);
+				while (CTAV_BUFFER_EC_FULL == CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_VIDEO_STREAM], &pkt)) {
+					Sleep(1);
+				}
 			}
 			else if (pkt.stream_index == m_audio_idx){
 				/*
@@ -99,11 +114,18 @@ int CTDemuxer::Execute()
 				Other Audio Codec (MP3...) works well.
 				*/
 				
-				CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_AUDIO_STREAM], &pkt);
+				while (CTAV_BUFFER_EC_FULL == CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_AUDIO_STREAM], &pkt)) {
+					Sleep(1);
+				}
+				printf("got a audio packet: %d\n", ++num_audio_packet);
 			}
 			av_packet_unref(&pkt);
 		}
+
+		if (ret == AVERROR_EOF)
+			m_keep_running = 0;
 	}
+	fclose(fp);
 	m_is_running = 0;
 
 	return 0;
@@ -111,7 +133,7 @@ int CTDemuxer::Execute()
 
 int CTDemuxer::IsFinished()
 {
-	return m_is_running;
+	return m_is_running ? 0 : 1;
 }
 
 int CTDemuxer::InitInternal()
