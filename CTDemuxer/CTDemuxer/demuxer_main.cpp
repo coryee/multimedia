@@ -6,7 +6,8 @@ CTAVPacketQueue video_queue;
 CTAVPacketQueue audio_queue;
 
 
-static char test_file[MAX_PATH] = "E:\\work\\testfiles\\wuyanzhu.flv";
+//static char test_file[MAX_PATH] = "E:\\work\\testfiles\\wuyanzhu.flv";
+static char test_file[MAX_PATH] = "E:\\testfile\\videoplayback_720.mp4";
 static char output_file_v[MAX_PATH];
 static char output_file_a[MAX_PATH];
 
@@ -21,11 +22,14 @@ static int Write2File(void *arg)
 	int num_video_packet = 0;
 	int num_audio_packet = 0;
 	int got_packet = 0;
+	int ret;
 	while (!g_exit) {
 		if (CTAV_BUFFER_EC_OK == CTAVPacketQueueGet(&video_queue, &packet)) {
-			fwrite(packet.data, 1, packet.size, fp_v);
+			ret = fwrite(packet.data, 1, packet.size, fp_v);
 			av_packet_unref(&packet);
 			printf("num_video_packet: %d\n", ++num_video_packet);
+			//fclose(fp_v);
+			//return 0;
 		}
 		if (CTAV_BUFFER_EC_OK == CTAVPacketQueueGet(&audio_queue, &packet)) {
 			fwrite(packet.data, 1, packet.size, fp_a);

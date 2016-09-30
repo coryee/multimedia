@@ -89,7 +89,7 @@ int CTDemuxer::Execute()
 
 	// test
 #if 1
-	FILE *fp = fopen("output.h264", "wb+");
+	FILE *fp = fopen("output.aac", "wb+");
 #endif
 
 
@@ -101,11 +101,13 @@ int CTDemuxer::Execute()
 					av_bitstream_filter_filter(m_h264bsfc, m_ifmt_ctx->streams[m_video_idx]->codec,
 						NULL, &pkt.data, &pkt.size, pkt.data, pkt.size, 0);
 				}
-				fwrite(pkt.data, 1, pkt.size, fp);
+				
 				printf("got a video packet: %d\n", ++num_video_packet);
 				while (CTAV_BUFFER_EC_FULL == CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_VIDEO_STREAM], &pkt)) {
 					Sleep(1);
 				}
+				//fclose(fp);
+				//return 0;
 			}
 			else if (pkt.stream_index == m_audio_idx){
 				/*
@@ -113,7 +115,7 @@ int CTDemuxer::Execute()
 				ADTS Header in front of AVPacket data manually.
 				Other Audio Codec (MP3...) works well.
 				*/
-				
+				ret = fwrite(pkt.data, 1, pkt.size, fp);
 				while (CTAV_BUFFER_EC_FULL == CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_AUDIO_STREAM], &pkt)) {
 					Sleep(1);
 				}
