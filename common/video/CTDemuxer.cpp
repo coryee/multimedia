@@ -11,7 +11,7 @@
 static int CTDemuxerExecute(void *arg)
 {
 	CTDemuxer *disp = (CTDemuxer *)arg;
-	disp->Execute1();
+	disp->Execute();
 	return(0);
 }
 
@@ -89,101 +89,6 @@ int CTDemuxer::Stop()
 }
 
 int CTDemuxer::Execute()
-{
-	int ret;
-	if (InitInternal() != 0)
-		return -1;
-	
-	AVPacket pkt;
-	m_keep_running = 1;
-
-	int num_video_packet = 0;
-	int num_audio_packet = 0;
-
-	int output_to_file = 0;
-	FILE *fp_video = NULL;
-	FILE *fp_audio = NULL;
-	if (m_video_output_file[0]) {
-		fp_video = fopen(m_video_output_file, "wb+");
-		if (fp_video == NULL)
-			return -1;
-		output_to_file = 1;
-	}
-
-	if (m_audio_output_file[0]) {
-		fp_audio = fopen(m_audio_output_file, "wb+");
-		if (fp_audio == NULL)
-			return -1;
-		output_to_file = 1;
-	}
-
-	av_init_packet(&pkt);
-	while (m_keep_running) {
-		ret = 0;
-		while ((ret = av_read_frame(m_ifmt_ctx, &pkt)) >= 0) {
-			if (pkt.stream_index == m_video_idx) {
-				if (output_to_file != 0) {
-					uint8_t *data = pkt.data;
-					int size = pkt.size;
-					if (m_h264bsfc) {
-						av_bitstream_filter_filter(m_h264bsfc, m_ifmt_ctx->streams[m_video_idx]->codec,
-							NULL, &data, &size, pkt.data, pkt.size, 0);
-					}
-
-					ret = fwrite(data, 1, size, fp_video);
-					if (m_h264bsfc)
-						av_free(data);
-					if (size != ret) {
-						CTDLog("failed to write data to file!!!\n");
-						m_keep_running = 0;
-						break;
-					}
-				} else {
-					while (CTAV_BUFFER_EC_FULL ==
-						CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_VIDEO_STREAM], &pkt)) {
-						Sleep(1);
-					}
-				}
-				printf("got a video packet: %d\n", ++num_video_packet);
-				av_packet_unref(&pkt);
-			}
-			else if (pkt.stream_index == m_audio_idx){
-				if (output_to_file != 0) {
-					/*
-					AAC in some container format (FLV, MP4, MKV etc.) need to add 7 Bytes
-					ADTS Header in front of AVPacket data manually.
-					Other Audio Codec (MP3...) works well.
-					*/
-					if (pkt.size != fwrite(pkt.data, 1, pkt.size, fp_audio)) {
-						CTDLog("failed to write data to file!!!\n");
-						m_keep_running = 0;
-						break;
-					}
-				} else {
-					while (CTAV_BUFFER_EC_FULL == CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_AUDIO_STREAM], &pkt)) {
-						Sleep(1);
-					}
-				}
-				printf("got a audio packet: %d\n", ++num_audio_packet);
-				av_packet_unref(&pkt);
-			}
-			Sleep(10);
-		}
-
-		if (ret == AVERROR_EOF)
-			m_keep_running = 0;
-	}
-	if (fp_video)
-		fclose(fp_video);
-	if (fp_audio)
-		fclose(fp_audio);
-	m_is_running = 0;
-
-	return 0;
-}
-
-
-int CTDemuxer::Execute1()
 {
 	int ret;
 	if (InitInternal() != 0)

@@ -22,7 +22,6 @@ public:
 	int Start();
 	int Stop();
 	int Execute();
-	int Execute1();
 	int IsFinished();
 private:
 	int InitInternal();
