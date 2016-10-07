@@ -51,7 +51,30 @@ static int Write2File(void *arg)
 	return(0);
 }
 
-int main()
+
+int TestOutput2File()
+{
+	CTDemuxer demuxer;
+
+	sprintf(output_file_v, "%s.h264", test_file);
+	sprintf(output_file_a, "%s.aac", test_file);
+
+	if (0 != demuxer.Init(test_file))
+		return -1;
+	demuxer.SetOutputFile(output_file_v, output_file_a);
+	demuxer.Start();
+
+	while (!demuxer.IsFinished()) {
+		Sleep(1000);
+	}
+
+	g_exit = 1;
+	Sleep(5000);
+
+	return 0;
+}
+
+int TestOutput2Queue()
 {
 	CTDemuxer demuxer;
 
@@ -88,5 +111,12 @@ int main()
 
 	CTAVPacketQueueDeInit(&video_queue);
 	CTAVPacketQueueDeInit(&audio_queue);
+	return 0;
+}
+
+int main()
+{
+	TestOutput2File();
+	//TestOutput2Queue();
 	return 0;
 }

@@ -72,6 +72,7 @@
     <ClCompile Include="..\..\..\common\thread\mutex_win.c" />
     <ClCompile Include="..\..\..\common\thread\threadutil.c" />
     <ClCompile Include="..\..\..\common\util\commutil.c" />
+    <ClCompile Include="..\..\common\video\adtsutil.c" />
     <ClCompile Include="..\..\common\video\CTAVBuffer.c" />
     <ClCompile Include="..\..\common\video\CTDemuxer.cpp" />
     <ClCompile Include="demuxer_main.cpp" />
@@ -80,6 +81,7 @@
     <ClInclude Include="..\..\..\common\thread\mutexutil.h" />
     <ClInclude Include="..\..\..\common\thread\threadutil.h" />
     <ClInclude Include="..\..\..\common\util\commutil.h" />
+    <ClInclude Include="..\..\common\video\adtsutil.h" />
     <ClInclude Include="..\..\common\video\CTAVBuffer.h" />
     <ClInclude Include="..\..\common\video\CTDemuxer.h" />
   </ItemGroup>

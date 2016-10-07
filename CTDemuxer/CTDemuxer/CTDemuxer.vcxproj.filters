@@ -33,6 +33,9 @@
     <ClCompile Include="demuxer_main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\common\video\adtsutil.c">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\common\video\CTDemuxer.h">
@@ -48,6 +51,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\common\thread\threadutil.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\video\adtsutil.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
