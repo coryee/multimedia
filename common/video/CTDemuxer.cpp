@@ -237,6 +237,8 @@ int CTDemuxer::Execute1()
 					CTAVPacketQueuePut(m_packet_queues[CTDEMUXER_QUEUE_VIDEO_STREAM], &pkt)) {
 					Sleep(1);
 				}
+				//fclose(fp);
+				//return 0;
 			}
 			printf("got a video packet: %d\n", ++num_video_packet);
 			av_packet_unref(&pkt);
