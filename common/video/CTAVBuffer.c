@@ -31,12 +31,10 @@ int CTAVPacketQueuePut(CTAVPacketQueue *pQueue, AVPacket *pPacket) {
 	pPacket1 = (AVPacketList *)av_malloc(sizeof(AVPacketList));
 	if (!pPacket1)
 		return CTAV_BUFFER_EC_FAILURE;
-//	pPacket1->pkt = *pPacket;
-// 	if (av_packet_ref(&(pPacket1->pkt), pPacket) < 0) {
-// 		return CTAV_BUFFER_EC_FAILURE;
-// 	}
-
-	av_packet_move_ref(&(pPacket1->pkt), pPacket);
+	av_init_packet(&(pPacket1->pkt));
+	if (av_packet_ref(&(pPacket1->pkt), pPacket) < 0) {
+		return CTAV_BUFFER_EC_FAILURE;
+	}
 	pPacket1->next = NULL;
 
 	CTMutexLock(pQueue->pMutex);
