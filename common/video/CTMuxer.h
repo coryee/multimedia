@@ -60,7 +60,7 @@ typedef struct CTMuxerOutput {
 	char container_format[CTMUXER_MAX_CONTAINER_FORMAT_SIZE];
 	int  need_audio_bitstream_filter;
 	int  need_video_bitstream_filter;
-};
+} CTMuxerOutput;
 
 // note: calling sequence
 //	1. AddOutputFileName()
