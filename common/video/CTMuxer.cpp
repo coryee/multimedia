@@ -3,7 +3,6 @@
 
 CTMuxer::CTMuxer()
 {
-	memset(m_output_streams, 0, sizeof(m_output_streams) * CTMUXER_NUM_STREAM_TYPE);
 	memset(m_input_stream_infos, 0, sizeof(m_input_stream_infos));
 	memset(m_input_stream_time_bases, 0, sizeof(m_input_stream_time_bases));
 	

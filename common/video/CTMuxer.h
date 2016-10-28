@@ -83,7 +83,6 @@ private:
 	int InitBitstreamFilter(int stream_type, AVCodecID codec_id);
 	
 private:
-	AVStream  *m_output_streams[CTMUXER_NUM_STREAM_TYPE];
 	CTMuxerStreamInfo m_input_stream_infos[CTMUXER_NUM_STREAM_TYPE];
 	AVRational	m_input_stream_time_bases[CTMUXER_NUM_STREAM_TYPE];
 	vector<CTMuxerOutput> m_outputs;
