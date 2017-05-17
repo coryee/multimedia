@@ -85,7 +85,7 @@ private:
 private:
 	CTMuxerStreamInfo m_input_stream_infos[CTMUXER_NUM_STREAM_TYPE];
 	AVRational	m_input_stream_time_bases[CTMUXER_NUM_STREAM_TYPE];
-	vector<CTMuxerOutput> m_outputs;
+	vector<CTMuxerOutput *> m_outputs;
 	AVBitStreamFilterContext *m_aacbsfc;
 	AVBitStreamFilterContext* m_h264bsfc;
 	int  m_inited;
